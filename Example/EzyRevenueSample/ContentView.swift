@@ -142,6 +142,14 @@ struct ContentView: View {
                     if let customerInfo = model.customerInfo {
                         Text("Original user: \(customerInfo.originalAppUserID ?? "-")")
                         Text("Active subscriptions: \(customerInfo.activeSubscriptions.sorted().joined(separator: ", "))")
+                        ForEach(customerInfo.subscriptions.keys.sorted(), id: \.self) { productIdentifier in
+                            if let subscription = customerInfo.subscriptions[productIdentifier] {
+                                Text(
+                                    "\(productIdentifier): \(subscription.status ?? "UNKNOWN")"
+                                )
+                                .font(.caption)
+                            }
+                        }
                         Text("Active entitlements: \(customerInfo.entitlements.values.filter(\.isActive).count)")
                     } else {
                         Text("No customer information loaded")

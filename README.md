@@ -28,6 +28,8 @@ if case .success = result {
 
 Select logging once during initialization. Use `.none` for silent operation. The SDK persists identity/session state in Keychain, submits verified StoreKit transactions to the backend before finishing them, and treats backend `CustomerInfo` as the entitlement authority.
 
+`CustomerInfo.subscriptions` exposes the backend `SubscriptionInfo.status` when present. `ACTIVE` means the subscription is active and `EXPIRED` means it is expired; older responses may return `nil`, in which case use `isActive` (the SDK falls back to the backend expiry date).
+
 The package uses the fixed production backend host defined by the SDK contract. It does not expose a paywall UI, analytics, consumables, or a custom durable transaction queue.
 
 ## Sample app

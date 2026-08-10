@@ -16,4 +16,4 @@ In Xcode, select the `EzyRevenueSample` scheme and run with `StoreKitConfigurati
 
 ## Sandbox/TestFlight
 
-For real App Store testing, register the bundle identifier and products in App Store Connect, use a Sandbox tester or TestFlight build, and configure the production API key through a private xcconfig. The backend `CustomerInfo` response is the only source used by the sample to display entitlement state.
+For real App Store testing, register the bundle identifier and products in App Store Connect, use a Sandbox tester or TestFlight build, and configure the production API key through a private xcconfig. The backend `CustomerInfo` response is the only source used by the sample to display entitlement state. Each subscription may expose `status` as `ACTIVE`, `EXPIRED`, or `nil`; `ACTIVE` means active, `EXPIRED` means expired, and `nil` means the SDK falls back to the subscription expiry date for `isActive`.

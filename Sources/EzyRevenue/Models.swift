@@ -140,6 +140,11 @@ public struct SubscriptionInfo: Equatable, Sendable {
     public let purchaseDate: Date?
     public let periodType: String?
     public let unsubscribeDetectedAt: Date?
+    /// Backend subscription status, normally `ACTIVE` or `EXPIRED`.
+    /// Older responses may omit this value.
+    public let status: String?
+    /// `true` for an `ACTIVE` status, `false` for `EXPIRED`; when status is nil,
+    /// this falls back to the backend expiry date.
     public let isActive: Bool
     public let willRenew: Bool
 
@@ -150,13 +155,15 @@ public struct SubscriptionInfo: Equatable, Sendable {
         periodType: String? = nil,
         unsubscribeDetectedAt: Date? = nil,
         isActive: Bool,
-        willRenew: Bool = false
+        willRenew: Bool = false,
+        status: String? = nil
     ) {
         self.productIdentifier = productIdentifier
         self.expirationDate = expirationDate
         self.purchaseDate = purchaseDate
         self.periodType = periodType
         self.unsubscribeDetectedAt = unsubscribeDetectedAt
+        self.status = status
         self.isActive = isActive
         self.willRenew = willRenew
     }

@@ -96,6 +96,53 @@ final class BackendMappingTests: XCTestCase {
             ["com.example.ezyrevenue.premium.monthly"]
         )
         XCTAssertTrue(customerInfo.subscriptions["com.example.ezyrevenue.premium.monthly"]?.willRenew == true)
+        XCTAssertEqual(
+            customerInfo.subscriptions["com.example.ezyrevenue.premium.monthly"]?.status,
+            "ACTIVE"
+        )
+    }
+
+    func testSubscriptionStatusOverridesDatesAndNilFallsBackToExpiry() {
+        let data = Data(
+            """
+            {
+              "request_date": "2026-08-03T17:25:00.000Z",
+              "subscriber": {
+                "original_app_user_id": "user-123",
+                "subscriptions": {
+                  "active": {
+                    "expires_date": "2026-01-01T00:00:00Z",
+                    "status": "active"
+                  },
+                  "expired": {
+                    "expires_date": "2099-01-01T00:00:00Z",
+                    "status": "EXPIRED"
+                  },
+                  "legacy-expired": {
+                    "expires_date": "2026-01-01T00:00:00Z",
+                    "status": null
+                  },
+                  "legacy-active": {
+                    "expires_date": "2099-01-01T00:00:00Z"
+                  }
+                }
+              }
+            }
+            """.utf8
+        )
+
+        guard case let .success(customerInfo) = BackendMapper.mapCustomerInfo(from: data) else {
+            return XCTFail("Expected subscription status response to map successfully")
+        }
+
+        XCTAssertTrue(customerInfo.subscriptions["active"]?.isActive == true)
+        XCTAssertEqual(customerInfo.subscriptions["active"]?.status, "ACTIVE")
+        XCTAssertFalse(customerInfo.subscriptions["expired"]?.isActive == true)
+        XCTAssertEqual(customerInfo.subscriptions["expired"]?.status, "EXPIRED")
+        XCTAssertFalse(customerInfo.subscriptions["legacy-expired"]?.isActive == true)
+        XCTAssertNil(customerInfo.subscriptions["legacy-expired"]?.status)
+        XCTAssertTrue(customerInfo.subscriptions["legacy-active"]?.isActive == true)
+        XCTAssertNil(customerInfo.subscriptions["legacy-active"]?.status)
     }
 
     func testValidEmptyCollectionsRemainSuccessful() {

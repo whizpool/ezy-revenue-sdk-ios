@@ -55,12 +55,17 @@ final class PublicAPIModelsTests: XCTestCase {
             subscriptions: [
                 "com.example.premium.monthly": SubscriptionInfo(
                     productIdentifier: "com.example.premium.monthly",
-                    isActive: true
+                    isActive: true,
+                    status: "ACTIVE"
                 )
             ]
         )
 
         XCTAssertTrue(customerInfo.entitlementIsActive("premium"))
         XCTAssertEqual(customerInfo.activeSubscriptions, ["com.example.premium.monthly"])
+        XCTAssertEqual(
+            customerInfo.subscriptions["com.example.premium.monthly"]?.status,
+            "ACTIVE"
+        )
     }
 }

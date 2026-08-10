@@ -13,7 +13,8 @@
       "com.example.ezyrevenue.premium.monthly": {
         "expires_date": "2099-01-01T00:00:00.000Z",
         "unsubscribe_detected_at": null,
-        "period_type": "normal"
+        "period_type": "normal",
+        "status": "ACTIVE"
       }
     }
   }

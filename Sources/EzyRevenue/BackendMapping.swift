@@ -222,7 +222,13 @@ internal enum BackendMapper {
         let expirationDate = try parseDate(dto.expirationDate)
         let purchaseDate = try parseDate(dto.purchaseDate)
         let unsubscribeDetectedAt = try parseDate(dto.unsubscribeDetectedAt)
-        let isActive = dto.isActive ?? isActive(expirationDate: expirationDate, at: requestDate)
+        let status = dto.status?.nonBlank?.uppercased()
+        let isActive = subscriptionIsActive(
+            status: status,
+            explicitIsActive: dto.isActive,
+            expirationDate: expirationDate,
+            at: requestDate
+        )
         let willRenew = dto.willRenew ?? (isActive && unsubscribeDetectedAt == nil)
         return SubscriptionInfo(
             productIdentifier: productIdentifier,
@@ -231,7 +237,8 @@ internal enum BackendMapper {
             periodType: dto.periodType?.nonBlank,
             unsubscribeDetectedAt: unsubscribeDetectedAt,
             isActive: isActive,
-            willRenew: willRenew
+            willRenew: willRenew,
+            status: status
         )
     }
 
@@ -255,6 +262,22 @@ internal enum BackendMapper {
     private static func isActive(expirationDate: Date?, at requestDate: Date) -> Bool {
         guard let expirationDate else { return true }
         return expirationDate > requestDate
+    }
+
+    private static func subscriptionIsActive(
+        status: String?,
+        explicitIsActive: Bool?,
+        expirationDate: Date?,
+        at requestDate: Date
+    ) -> Bool {
+        switch status?.normalizedToken {
+        case "active":
+            return true
+        case "expired":
+            return false
+        default:
+            return explicitIsActive ?? isActive(expirationDate: expirationDate, at: requestDate)
+        }
     }
 
     private enum MappingFailure: Error {
@@ -389,6 +412,7 @@ private struct SubscriptionDTO: Decodable {
     let purchaseDate: String?
     let unsubscribeDetectedAt: String?
     let periodType: String?
+    let status: String?
     let isActive: Bool?
     let willRenew: Bool?
 
@@ -397,6 +421,7 @@ private struct SubscriptionDTO: Decodable {
         case purchaseDate = "purchase_date"
         case unsubscribeDetectedAt = "unsubscribe_detected_at"
         case periodType = "period_type"
+        case status
         case isActive = "is_active"
         case willRenew = "will_renew"
     }
