@@ -3,6 +3,51 @@ import XCTest
 @testable import EzyRevenue
 
 final class BackendMappingTests: XCTestCase {
+    func testLoginMappingAcceptsTokenlessAndOptionalAccessTokenResponses() {
+        XCTAssertEqual(
+            BackendMapper.mapLoginAccessToken(from: Data("{}".utf8)),
+            .success(nil)
+        )
+        XCTAssertEqual(
+            BackendMapper.mapLoginAccessToken(
+                from: Data("{\"appAccessToken\":\"token\"}".utf8)
+            ),
+            .success("token")
+        )
+        XCTAssertEqual(
+            BackendMapper.mapLoginAccessToken(from: Data("not-json".utf8)),
+            .failure(.invalidResponse)
+        )
+    }
+
+    func testOfferingsRejectMismatchedPackageStoreKitIdentifiers() {
+        let data = Data(
+            """
+            {
+              "offerings": [{
+                "identifier": "premium",
+                "packages": [{
+                  "identifier": "monthly",
+                  "platform_product_identifier": "platform-id",
+                  "products": [{
+                    "identifier": "different-id",
+                    "displayName": "Premium",
+                    "type": "SUBSCRIPTION",
+                    "storeStatus": "APPROVED",
+                    "isActive": true
+                  }]
+                }]
+              }]
+            }
+            """.utf8
+        )
+
+        XCTAssertEqual(
+            BackendMapper.mapOfferings(from: data),
+            .failure(.invalidResponse)
+        )
+    }
+
     func testOfferingsFixtureMapsTheCurrentOfferingAndMicros() throws {
         let result = BackendMapper.mapOfferings(from: fixture("offerings-success"))
         guard case let .success(snapshot) = result else {
