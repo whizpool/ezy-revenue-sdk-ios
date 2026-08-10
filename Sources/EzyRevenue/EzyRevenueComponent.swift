@@ -36,12 +36,11 @@ internal final class EzyRevenueComponent {
     static func unavailable() -> EzyRevenueComponent {
         EzyRevenueComponent(
             backend: UnavailableBackend(),
-            sessionStore: UnavailableSessionStore(),
+            sessionStore: KeychainSessionStore(),
             storeKitGateway: UnavailableStoreKitGateway()
         )
     }
 }
 
 private struct UnavailableBackend: EzyRevenueBackend {}
-private struct UnavailableSessionStore: SessionStore {}
 private struct UnavailableStoreKitGateway: StoreKitGateway {}

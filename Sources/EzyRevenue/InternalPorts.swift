@@ -84,8 +84,54 @@ extension EzyRevenueBackend {
     }
 }
 
+/// One small persisted record for the active SDK identity and backend session.
+internal struct StoredSession: Codable, Equatable, Sendable {
+    let appUserID: String
+    let apiKeyFingerprint: String
+    let accessToken: String?
+    let createdAt: Date
+
+    init(
+        appUserID: String,
+        apiKeyFingerprint: String,
+        accessToken: String?,
+        createdAt: Date = Date()
+    ) {
+        self.appUserID = appUserID
+        self.apiKeyFingerprint = apiKeyFingerprint
+        self.accessToken = accessToken
+        self.createdAt = createdAt
+    }
+}
+
 /// Keychain-backed session boundary.
-internal protocol SessionStore: Sendable {}
+internal protocol SessionStore: Sendable {
+    func save(_ session: StoredSession) async throws
+    func load(apiKeyFingerprint: String) async throws -> StoredSession?
+    func clear() async throws
+}
+
+/// Default behavior keeps test-only boundary fakes source-compatible until
+/// session coordination is wired to persistence.
+extension SessionStore {
+    func save(_ session: StoredSession) async throws {
+        throw SessionStoreError.unavailable
+    }
+
+    func load(apiKeyFingerprint: String) async throws -> StoredSession? {
+        throw SessionStoreError.unavailable
+    }
+
+    func clear() async throws {
+        throw SessionStoreError.unavailable
+    }
+}
+
+internal enum SessionStoreError: Error, Equatable, Sendable {
+    case unavailable
+    case invalidRecord
+    case keychainStatus(Int32)
+}
 
 /// StoreKit boundary used by catalog and purchase flows.
 internal protocol StoreKitGateway: Sendable {}
