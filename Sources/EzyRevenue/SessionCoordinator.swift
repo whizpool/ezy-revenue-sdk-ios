@@ -220,6 +220,24 @@ internal final class SessionCoordinator: @unchecked Sendable {
                     return .failure(.internalError("Session clear failed"))
                 }
 
+                if let fingerprint = current.configuredAPIKeyFingerprint {
+                    let anonymousID = AnonymousAppUserID.generate()
+                    do {
+                        try await sessionStore.save(
+                            StoredSession(
+                                appUserID: anonymousID,
+                                apiKeyFingerprint: fingerprint,
+                                accessToken: nil,
+                                isAuthenticated: false
+                            )
+                        )
+                    } catch {
+                        clearAllState()
+                        logError("session_logout_failed: identity save failed")
+                        return .failure(.internalError("Session identity save failed"))
+                    }
+                }
+
                 clearAllState()
                 return .success(())
             }
@@ -304,6 +322,7 @@ internal final class SessionCoordinator: @unchecked Sendable {
             ?? AnonymousAppUserID.generate()
 
         if let savedSession,
+           savedSession.isAuthenticated,
            savedSession.apiKeyFingerprint == apiKeyFingerprint,
            savedSession.appUserID == effectiveAppUserID {
             activate(savedSession)

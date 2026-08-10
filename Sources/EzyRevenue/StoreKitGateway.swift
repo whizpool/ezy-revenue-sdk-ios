@@ -44,13 +44,22 @@ internal struct StoreKitVerifiedTransaction: @unchecked Sendable {
     let id: UInt64
     let productID: String
     let jwsRepresentation: String
-    fileprivate let rawTransaction: StoreKit.Transaction
+    fileprivate let rawTransaction: StoreKit.Transaction?
 
     init(transaction: StoreKit.Transaction, jwsRepresentation: String) {
         id = transaction.id
         productID = transaction.productID
         self.jwsRepresentation = jwsRepresentation
         rawTransaction = transaction
+    }
+
+    /// Test and recovery seam when no live StoreKit transaction object is
+    /// available. Production StoreKit results always carry the raw handle.
+    internal init(id: UInt64, productID: String, jwsRepresentation: String) {
+        self.id = id
+        self.productID = productID
+        self.jwsRepresentation = jwsRepresentation
+        rawTransaction = nil
     }
 }
 
@@ -293,7 +302,8 @@ internal final class StoreKit2Gateway: StoreKitGateway, @unchecked Sendable {
     }
 
     func finish(_ transaction: StoreKitVerifiedTransaction) async {
-        await transaction.rawTransaction.finish()
+        guard let rawTransaction = transaction.rawTransaction else { return }
+        await rawTransaction.finish()
     }
 
     func syncStore() async throws {
@@ -308,6 +318,7 @@ internal final class StoreKit2Gateway: StoreKitGateway, @unchecked Sendable {
 
     func shutdown() {
         listenerTask.cancel()
+        let updateHub = self.updateHub
         Task {
             await updateHub.finish()
         }

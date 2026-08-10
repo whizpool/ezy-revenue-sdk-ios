@@ -90,17 +90,39 @@ internal struct StoredSession: Codable, Equatable, Sendable {
     let apiKeyFingerprint: String
     let accessToken: String?
     let createdAt: Date
+    let isAuthenticated: Bool
 
     init(
         appUserID: String,
         apiKeyFingerprint: String,
         accessToken: String?,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        isAuthenticated: Bool = true
     ) {
         self.appUserID = appUserID
         self.apiKeyFingerprint = apiKeyFingerprint
         self.accessToken = accessToken
         self.createdAt = createdAt
+        self.isAuthenticated = isAuthenticated
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case appUserID
+        case apiKeyFingerprint
+        case accessToken
+        case createdAt
+        case isAuthenticated
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        appUserID = try container.decode(String.self, forKey: .appUserID)
+        apiKeyFingerprint = try container.decode(String.self, forKey: .apiKeyFingerprint)
+        accessToken = try container.decodeIfPresent(String.self, forKey: .accessToken)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        // Records written before the identity-only marker existed are active
+        // sessions and remain backward compatible.
+        isAuthenticated = try container.decodeIfPresent(Bool.self, forKey: .isAuthenticated) ?? true
     }
 }
 
