@@ -167,9 +167,19 @@ public actor EzyRevenue {
         _ package: OfferingPackage
     ) async -> EzyRevenueResult<PurchaseResult> {
         guard initialized else { return notInitialized(operation: "purchasePackage") }
-        _ = package
-        logger.error("purchasePackage_failed: Runtime wiring is not available yet")
-        return .failure(.internalError("Runtime wiring is not available yet"))
+        guard #available(macOS 12.0, iOS 15.0, *) else {
+            logger.error("purchasePackage_failed: StoreKit 2 requires iOS 15")
+            return .failure(.billingUnavailable)
+        }
+        let result = await component.purchaseCoordinator.purchasePackage(
+            package,
+            session: component.sessionCoordinator
+        )
+        let mapped = mapPurchaseResult(result)
+        if case let .failure(error) = mapped {
+            logger.error("purchasePackage_failed: \(error.localizedDescription)")
+        }
+        return mapped
     }
 
     /// Purchases a catalog product.
@@ -177,9 +187,19 @@ public actor EzyRevenue {
         _ product: Product
     ) async -> EzyRevenueResult<PurchaseResult> {
         guard initialized else { return notInitialized(operation: "purchaseProduct") }
-        _ = product
-        logger.error("purchaseProduct_failed: Runtime wiring is not available yet")
-        return .failure(.internalError("Runtime wiring is not available yet"))
+        guard #available(macOS 12.0, iOS 15.0, *) else {
+            logger.error("purchaseProduct_failed: StoreKit 2 requires iOS 15")
+            return .failure(.billingUnavailable)
+        }
+        let result = await component.purchaseCoordinator.purchaseProduct(
+            product,
+            session: component.sessionCoordinator
+        )
+        let mapped = mapPurchaseResult(result)
+        if case let .failure(error) = mapped {
+            logger.error("purchaseProduct_failed: \(error.localizedDescription)")
+        }
+        return mapped
     }
 
     /// Restores purchases without initiating a new charge.
@@ -248,6 +268,25 @@ public actor EzyRevenue {
             initialized = false
         }
         return result
+    }
+
+    @available(macOS 12.0, iOS 15.0, *)
+    private func mapPurchaseResult(
+        _ result: EzyRevenueResult<PurchaseFlowResult>
+    ) -> EzyRevenueResult<PurchaseResult> {
+        switch result {
+        case let .success(flowResult):
+            switch flowResult {
+            case .purchased:
+                return .success(.purchased)
+            case .pending:
+                return .success(.pending)
+            case .cancelled:
+                return .success(.cancelled)
+            }
+        case let .failure(error):
+            return .failure(error)
+        }
     }
 
     private func notInitialized<T>(operation: String) -> EzyRevenueResult<T> {
