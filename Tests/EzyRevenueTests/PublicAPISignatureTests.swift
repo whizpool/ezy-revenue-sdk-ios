@@ -1,9 +1,16 @@
 import XCTest
 @testable import EzyRevenue
 
+@available(macOS 12.0, iOS 15.0, *)
 final class PublicAPISignatureTests: XCTestCase {
     func testPublicFacadeExposesTheV1OperationSurface() async {
-        let sdk = EzyRevenue()
+        let sdk = EzyRevenue(
+            component: EzyRevenueComponent(
+                backend: TestBackend(),
+                sessionStore: TestSessionStore(),
+                storeKitGateway: TestStoreKitGateway()
+            )
+        )
         let configuration = EzyRevenueConfiguration(
             apiKey: "test-api-key",
             logLevel: .none
