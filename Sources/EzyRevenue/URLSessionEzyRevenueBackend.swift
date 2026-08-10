@@ -10,6 +10,7 @@ internal final class URLSessionEzyRevenueBackend: EzyRevenueBackend, @unchecked 
     private let urlSession: URLSession
     private let ownsSession: Bool
     private let metadataProvider: @Sendable () async -> RequestMetadata
+    private let logger: EzyRevenueLogger
 
     /// The finite timeout applied to SDK-created URLSession requests.
     let requestTimeout: TimeInterval
@@ -21,7 +22,8 @@ internal final class URLSessionEzyRevenueBackend: EzyRevenueBackend, @unchecked 
         requestTimeout: TimeInterval = 15,
         metadataProvider: @escaping @Sendable () async -> RequestMetadata = {
             await MetadataProvider.current()
-        }
+        },
+        logger: EzyRevenueLogger = EzyRevenueLogger(level: .none)
     ) {
         precondition(!apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         precondition(requestTimeout > 0)
@@ -31,6 +33,7 @@ internal final class URLSessionEzyRevenueBackend: EzyRevenueBackend, @unchecked 
         self.baseURL = baseURL
         self.requestTimeout = requestTimeout
         self.metadataProvider = metadataProvider
+        self.logger = logger
 
         if let urlSession {
             self.urlSession = urlSession
@@ -155,6 +158,13 @@ internal final class URLSessionEzyRevenueBackend: EzyRevenueBackend, @unchecked 
         if let value = metadata.storefront {
             request.setValue(value, forHTTPHeaderField: "X-Storefront")
         }
+        logger.debug(
+            "backend_request: \(method) \(url.absoluteString)"
+        )
+        if let body,
+           let bodyText = String(data: body, encoding: .utf8) {
+            logger.verbose("backend_request_body: \(bodyText)")
+        }
         return request
     }
 
@@ -188,10 +198,18 @@ internal final class URLSessionEzyRevenueBackend: EzyRevenueBackend, @unchecked 
         do {
             let (data, response) = try await urlSession.data(for: request)
             guard let response = response as? HTTPURLResponse else {
+                logger.error("backend_response_failed: response was not HTTP")
                 return .failure(.network)
             }
 
+            logger.debug("backend_response: status=\(response.statusCode)")
+            if !data.isEmpty,
+               let bodyText = String(data: data, encoding: .utf8) {
+                logger.verbose("backend_response_body: \(bodyText)")
+            }
+
             guard acceptedStatusCodes.contains(response.statusCode) else {
+                logger.error("backend_response_rejected: status=\(response.statusCode)")
                 return .failure(error(for: response.statusCode))
             }
 
@@ -205,6 +223,7 @@ internal final class URLSessionEzyRevenueBackend: EzyRevenueBackend, @unchecked 
         } catch let error as URLError where error.code == .cancelled {
             throw CancellationError()
         } catch {
+            logger.error("backend_request_failed: \(error.localizedDescription)")
             return .failure(.network)
         }
     }
