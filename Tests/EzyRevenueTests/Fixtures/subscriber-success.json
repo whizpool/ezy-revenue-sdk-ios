@@ -1,0 +1,20 @@
+{
+  "request_date": "2026-08-03T17:25:00.000Z",
+  "subscriber": {
+    "original_app_user_id": "$RCAnonymousID:12345678-1234-1234-1234-1234567890ab",
+    "entitlements": {
+      "premium": {
+        "expires_date": "2099-01-01T00:00:00.000Z",
+        "purchase_date": "2026-08-03T17:25:00.000Z",
+        "product_identifier": "com.example.ezyrevenue.premium.monthly"
+      }
+    },
+    "subscriptions": {
+      "com.example.ezyrevenue.premium.monthly": {
+        "expires_date": "2099-01-01T00:00:00.000Z",
+        "unsubscribe_detected_at": null,
+        "period_type": "normal"
+      }
+    }
+  }
+}

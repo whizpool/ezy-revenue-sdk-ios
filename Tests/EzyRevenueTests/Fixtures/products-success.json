@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "data": [
+    {
+      "productId": "product-premium-monthly",
+      "identifier": "com.example.ezyrevenue.premium.monthly",
+      "displayName": "Premium Monthly",
+      "type": "SUBSCRIPTION",
+      "storeStatus": "APPROVED",
+      "productGroup": "premium",
+      "isActive": true,
+      "price": {
+        "amount": 9990000,
+        "currency": "USD"
+      },
+      "introductoryPrice": null
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "current_offering_id": "offering-premium",
+  "offerings": [
+    {
+      "identifier": "offering-premium",
+      "description": "Premium access",
+      "isDefault": true,
+      "packages": [
+        {
+          "identifier": "$rc_monthly",
+          "platform_product_identifier": "com.example.ezyrevenue.premium.monthly",
+          "products": [
+            {
+              "productId": "product-premium-monthly",
+              "identifier": "com.example.ezyrevenue.premium.monthly",
+              "displayName": "Premium Monthly",
+              "type": "SUBSCRIPTION",
+              "storeStatus": "APPROVED",
+              "productGroup": "premium",
+              "isActive": true,
+              "price": {
+                "amount": 9990000,
+                "currency": "USD"
+              },
+              "introductoryPrice": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "identifier": "offering-basic",
+      "description": "Basic access",
+      "isDefault": false,
+      "packages": []
+    }
+  ]
+}

@@ -21,7 +21,10 @@ let package = Package(
         .testTarget(
             name: "EzyRevenueTests",
             dependencies: ["EzyRevenue"],
-            path: "Tests/EzyRevenueTests"
+            path: "Tests/EzyRevenueTests",
+            resources: [
+                .process("Fixtures"),
+            ]
         ),
     ]
 )
