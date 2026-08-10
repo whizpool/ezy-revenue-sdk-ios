@@ -1,8 +1,7 @@
 /// Application-scoped entry point for the EzyRevenue iOS SDK.
 ///
-/// Runtime wiring is added in the following implementation steps. The public
-/// surface is defined here so host applications can compile against the v1 API
-/// while the internal coordinators are built behind it.
+/// The facade is actor-isolated. Its coordinators and external ports are
+/// constructed manually in one internal component graph.
 public actor EzyRevenue {
     /// The shared application-scoped SDK instance.
     public static let shared = EzyRevenue()
@@ -10,8 +9,48 @@ public actor EzyRevenue {
     /// The SDK version sent to the EzyRevenue backend.
     public static let sdkVersion = "1.0.0"
 
+    private let component: EzyRevenueComponent
+    private var initialized = false
+
     /// Creates the internal runtime instance used by the shared facade and tests.
-    init() {}
+    init() {
+        self.component = .unavailable()
+    }
+
+    /// Creates a facade with explicitly supplied test boundaries.
+    internal init(component: EzyRevenueComponent) {
+        self.component = component
+    }
+
+    /// Whether initialization has completed successfully.
+    public var isInitialized: Bool {
+        initialized
+    }
+
+    /// The active custom or SDK-generated app user ID, when available.
+    public var appUserID: String? {
+        component.sessionCoordinator.appUserID
+    }
+
+    /// Last committed offerings snapshot.
+    public var offerings: [Offering] {
+        component.catalogCoordinator.offerings
+    }
+
+    /// Current offering from the last committed offerings snapshot.
+    public var currentOffering: Offering? {
+        component.catalogCoordinator.currentOffering
+    }
+
+    /// Last committed product snapshot.
+    public var products: [Product] {
+        component.catalogCoordinator.products
+    }
+
+    /// Last committed backend customer snapshot.
+    public var customerInfo: CustomerInfo? {
+        component.catalogCoordinator.customerInfo
+    }
 
     /// Initializes the SDK for the supplied configuration.
     public func initialize(
@@ -29,29 +68,36 @@ public actor EzyRevenue {
 
     /// Switches the active SDK identity to a custom application user ID.
     public func logIn(appUserID: String) async -> EzyRevenueResult<Void> {
-        _ = appUserID
+        guard initialized else { return .failure(.notInitialized) }
+        guard !appUserID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .failure(.invalidConfiguration("appUserID must not be blank"))
+        }
         return .failure(.internalError("Runtime wiring is not available yet"))
     }
 
     /// Fetches offerings for the active identity.
     public func getOfferings() async -> EzyRevenueResult<[Offering]> {
-        .failure(.internalError("Runtime wiring is not available yet"))
+        guard initialized else { return .failure(.notInitialized) }
+        return .failure(.internalError("Runtime wiring is not available yet"))
     }
 
     /// Fetches the complete product catalog.
     public func getProducts() async -> EzyRevenueResult<[Product]> {
-        .failure(.internalError("Runtime wiring is not available yet"))
+        guard initialized else { return .failure(.notInitialized) }
+        return .failure(.internalError("Runtime wiring is not available yet"))
     }
 
     /// Fetches backend-authoritative customer information.
     public func getCustomerInfo() async -> EzyRevenueResult<CustomerInfo> {
-        .failure(.internalError("Runtime wiring is not available yet"))
+        guard initialized else { return .failure(.notInitialized) }
+        return .failure(.internalError("Runtime wiring is not available yet"))
     }
 
     /// Purchases an offering package.
     public func purchasePackage(
         _ package: OfferingPackage
     ) async -> EzyRevenueResult<PurchaseResult> {
+        guard initialized else { return .failure(.notInitialized) }
         _ = package
         return .failure(.internalError("Runtime wiring is not available yet"))
     }
@@ -60,17 +106,20 @@ public actor EzyRevenue {
     public func purchaseProduct(
         _ product: Product
     ) async -> EzyRevenueResult<PurchaseResult> {
+        guard initialized else { return .failure(.notInitialized) }
         _ = product
         return .failure(.internalError("Runtime wiring is not available yet"))
     }
 
     /// Restores purchases without initiating a new charge.
     public func restorePurchases() async -> EzyRevenueResult<CustomerInfo> {
-        .failure(.internalError("Runtime wiring is not available yet"))
+        guard initialized else { return .failure(.notInitialized) }
+        return .failure(.internalError("Runtime wiring is not available yet"))
     }
 
     /// Ends the active SDK session and clears local runtime state.
     public func logOut() async -> EzyRevenueResult<Void> {
-        .failure(.internalError("Runtime wiring is not available yet"))
+        guard initialized else { return .failure(.notInitialized) }
+        return .failure(.internalError("Runtime wiring is not available yet"))
     }
 }
