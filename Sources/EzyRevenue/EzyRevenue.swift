@@ -9,18 +9,23 @@ public actor EzyRevenue {
     /// The SDK version sent to the EzyRevenue backend.
     public static let sdkVersion = "1.0.0"
 
-    private let component: EzyRevenueComponent
+    private var component: EzyRevenueComponent
+    private let usesInjectedComponent: Bool
     private var initialized = false
     private var logger = EzyRevenueLogger(level: .none)
+    private var configuredAPIKeyFingerprint: String?
+    private var initializationTask: Task<EzyRevenueResult<Void>, Never>?
 
     /// Creates the internal runtime instance used by the shared facade and tests.
     init() {
         self.component = .unavailable()
+        self.usesInjectedComponent = false
     }
 
     /// Creates a facade with explicitly supplied test boundaries.
     internal init(component: EzyRevenueComponent) {
         self.component = component
+        self.usesInjectedComponent = true
     }
 
     /// Whether initialization has completed successfully.
@@ -57,6 +62,12 @@ public actor EzyRevenue {
     public func initialize(
         configuration: EzyRevenueConfiguration
     ) async -> EzyRevenueResult<Void> {
+        // Concurrent callers share the first initialization operation. A
+        // second configuration waits rather than racing identity transitions.
+        if let initializationTask {
+            return await initializationTask.value
+        }
+
         // Selecting a level is the first initialization action. The initial
         // logger is `.none`, so calls made before this method remain silent.
         logger = EzyRevenueLogger(
@@ -75,8 +86,13 @@ public actor EzyRevenue {
             return .failure(.invalidConfiguration("appUserID must not be blank"))
         }
 
-        logger.error("initialize_failed: Runtime wiring is not available yet")
-        return .failure(.internalError("Runtime wiring is not available yet"))
+        let task = Task { [configuration] in
+            await self.performInitialize(configuration: configuration)
+        }
+        initializationTask = task
+        let result = await task.value
+        initializationTask = nil
+        return result
     }
 
     /// Switches the active SDK identity to a custom application user ID.
@@ -86,8 +102,17 @@ public actor EzyRevenue {
             logger.error("logIn_failed: appUserID must not be blank")
             return .failure(.invalidConfiguration("appUserID must not be blank"))
         }
-        logger.error("logIn_failed: Runtime wiring is not available yet")
-        return .failure(.internalError("Runtime wiring is not available yet"))
+
+        let result = await component.sessionCoordinator.login(appUserID: appUserID)
+        if case .success = result {
+            component.catalogCoordinator.clear()
+            component.purchaseCoordinator.clear()
+            initialized = true
+            logger.info("logIn_succeeded")
+        } else {
+            initialized = false
+        }
+        return result
     }
 
     /// Fetches offerings for the active identity.
@@ -141,8 +166,56 @@ public actor EzyRevenue {
     /// Ends the active SDK session and clears local runtime state.
     public func logOut() async -> EzyRevenueResult<Void> {
         guard initialized else { return notInitialized(operation: "logOut") }
-        logger.error("logOut_failed: Runtime wiring is not available yet")
-        return .failure(.internalError("Runtime wiring is not available yet"))
+
+        let result = await component.sessionCoordinator.logout()
+        component.catalogCoordinator.clear()
+        component.purchaseCoordinator.clear()
+        initialized = false
+        if case .success = result {
+            logger.info("logOut_succeeded")
+        }
+        return result
+    }
+
+    private func performInitialize(
+        configuration: EzyRevenueConfiguration
+    ) async -> EzyRevenueResult<Void> {
+        let fingerprint = APIKeyFingerprint.make(configuration.apiKey)
+
+        if !usesInjectedComponent,
+           configuredAPIKeyFingerprint != fingerprint {
+            if initialized {
+                _ = await component.sessionCoordinator.logout()
+                component.catalogCoordinator.clear()
+                component.purchaseCoordinator.clear()
+                initialized = false
+            }
+
+            guard #available(macOS 12.0, iOS 15.0, *) else {
+                logger.error("initialize_failed: StoreKit 2 requires iOS 15")
+                return .failure(.billingUnavailable)
+            }
+            component = .runtime(
+                apiKey: configuration.apiKey,
+                userCountryCode: configuration.userCountryCode,
+                logger: logger
+            )
+        } else {
+            component.sessionCoordinator.updateLogger(logger)
+        }
+
+        let result = await component.sessionCoordinator.initialize(
+            apiKeyFingerprint: fingerprint,
+            requestedAppUserID: configuration.appUserID
+        )
+        if case .success = result {
+            configuredAPIKeyFingerprint = fingerprint
+            initialized = true
+            logger.info("initialize_succeeded")
+        } else {
+            initialized = false
+        }
+        return result
     }
 
     private func notInitialized<T>(operation: String) -> EzyRevenueResult<T> {

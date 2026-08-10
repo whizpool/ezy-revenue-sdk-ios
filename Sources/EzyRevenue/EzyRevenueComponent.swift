@@ -14,14 +14,16 @@ internal final class EzyRevenueComponent {
     init(
         backend: any EzyRevenueBackend,
         sessionStore: any SessionStore,
-        storeKitGateway: any StoreKitGateway
+        storeKitGateway: any StoreKitGateway,
+        logger: EzyRevenueLogger = EzyRevenueLogger(level: .none)
     ) {
         self.backend = backend
         self.sessionStore = sessionStore
         self.storeKitGateway = storeKitGateway
         self.sessionCoordinator = SessionCoordinator(
             backend: backend,
-            sessionStore: sessionStore
+            sessionStore: sessionStore,
+            logger: logger
         )
         self.catalogCoordinator = CatalogCoordinator(
             backend: backend,
@@ -33,11 +35,35 @@ internal final class EzyRevenueComponent {
         )
     }
 
-    static func unavailable() -> EzyRevenueComponent {
+    static func unavailable(
+        logger: EzyRevenueLogger = EzyRevenueLogger(level: .none)
+    ) -> EzyRevenueComponent {
         EzyRevenueComponent(
             backend: UnavailableBackend(),
-            sessionStore: KeychainSessionStore(),
-            storeKitGateway: UnavailableStoreKitGateway()
+            sessionStore: KeychainSessionStore(logger: logger),
+            storeKitGateway: UnavailableStoreKitGateway(),
+            logger: logger
+        )
+    }
+
+    @available(macOS 12.0, iOS 15.0, *)
+    static func runtime(
+        apiKey: String,
+        userCountryCode: String?,
+        logger: EzyRevenueLogger
+    ) -> EzyRevenueComponent {
+        let backend = URLSessionEzyRevenueBackend(
+            apiKey: apiKey,
+            metadataProvider: {
+                await MetadataProvider.current(userCountryCode: userCountryCode)
+            },
+            logger: logger
+        )
+        return EzyRevenueComponent(
+            backend: backend,
+            sessionStore: KeychainSessionStore(logger: logger),
+            storeKitGateway: UnavailableStoreKitGateway(),
+            logger: logger
         )
     }
 }

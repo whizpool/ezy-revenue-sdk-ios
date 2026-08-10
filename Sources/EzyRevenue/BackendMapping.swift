@@ -9,6 +9,15 @@ internal struct OfferingSnapshot: Equatable, Sendable {
 /// Internal transport-to-domain mapper. DTOs intentionally remain private to
 /// the SDK target and unknown JSON fields are ignored by Decodable.
 internal enum BackendMapper {
+    static func mapLoginAccessToken(from data: Data) -> EzyRevenueResult<String?> {
+        do {
+            let response = try decode(LoginResponseDTO.self, from: data)
+            return .success(response.appAccessToken?.nonBlank)
+        } catch {
+            return .failure(.invalidResponse)
+        }
+    }
+
     static func mapOfferings(from data: Data) -> EzyRevenueResult<OfferingSnapshot> {
         do {
             let response = try decode(OfferingsResponseDTO.self, from: data)
@@ -241,6 +250,14 @@ internal enum BackendMapper {
 
     private enum MappingFailure: Error {
         case invalid
+    }
+}
+
+private struct LoginResponseDTO: Decodable {
+    let appAccessToken: String?
+
+    enum CodingKeys: String, CodingKey {
+        case appAccessToken = "appAccessToken"
     }
 }
 
