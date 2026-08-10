@@ -1,6 +1,30 @@
 import Foundation
 import StoreKit
 
+/// StoreKit subscription metadata normalized into Sendable SDK values.
+@available(macOS 12.0, iOS 15.0, *)
+internal enum StoreKitSubscriptionUnit: String, Equatable, Sendable {
+    case day
+    case week
+    case month
+    case year
+}
+
+@available(macOS 12.0, iOS 15.0, *)
+internal struct StoreKitSubscriptionPeriod: Equatable, Sendable {
+    let value: Int
+    let unit: StoreKitSubscriptionUnit
+}
+
+@available(macOS 12.0, iOS 15.0, *)
+internal struct StoreKitIntroductoryOffer: Equatable, Sendable {
+    let priceMicros: Int64
+    let displayPrice: String
+    let period: StoreKitSubscriptionPeriod
+    let periodCount: Int
+    let paymentMode: String
+}
+
 /// StoreKit product data kept internal to the SDK.
 @available(macOS 12.0, iOS 15.0, *)
 internal struct StoreKitProduct: Equatable, Sendable {
@@ -8,6 +32,10 @@ internal struct StoreKitProduct: Equatable, Sendable {
     let displayName: String
     let description: String
     let displayPrice: String
+    let priceMicros: Int64
+    let currencyCode: String
+    let subscriptionPeriod: StoreKitSubscriptionPeriod?
+    let introductoryOffer: StoreKitIntroductoryOffer?
 }
 
 /// A verified transaction handle retained until backend processing can finish it.
@@ -171,7 +199,33 @@ internal final class StoreKit2Gateway: StoreKitGateway, @unchecked Sendable {
                     id: $0.id,
                     displayName: $0.displayName,
                     description: $0.description,
-                    displayPrice: $0.displayPrice
+                    displayPrice: $0.displayPrice,
+                    priceMicros: Self.micros($0.price),
+                    currencyCode: $0.priceFormatStyle.currencyCode,
+                    subscriptionPeriod: $0.subscription.flatMap {
+                        guard let unit = Self.mapUnit($0.subscriptionPeriod.unit) else {
+                            return nil
+                        }
+                        return StoreKitSubscriptionPeriod(
+                            value: $0.subscriptionPeriod.value,
+                            unit: unit
+                        )
+                    },
+                    introductoryOffer: $0.subscription?.introductoryOffer.flatMap {
+                        guard let unit = Self.mapUnit($0.period.unit) else {
+                            return nil
+                        }
+                        return StoreKitIntroductoryOffer(
+                            priceMicros: Self.micros($0.price),
+                            displayPrice: $0.displayPrice,
+                            period: StoreKitSubscriptionPeriod(
+                                value: $0.period.value,
+                                unit: unit
+                            ),
+                            periodCount: $0.periodCount,
+                            paymentMode: $0.paymentMode.rawValue
+                        )
+                    }
                 )
             }
         } catch is CancellationError {
@@ -256,6 +310,29 @@ internal final class StoreKit2Gateway: StoreKitGateway, @unchecked Sendable {
         listenerTask.cancel()
         Task {
             await updateHub.finish()
+        }
+    }
+
+    private static func micros(_ price: Decimal) -> Int64 {
+        NSDecimalNumber(decimal: price)
+            .multiplying(by: NSDecimalNumber(value: 1_000_000))
+            .int64Value
+    }
+
+    private static func mapUnit(
+        _ unit: StoreKit.Product.SubscriptionPeriod.Unit
+    ) -> StoreKitSubscriptionUnit? {
+        switch unit {
+        case .day:
+            return .day
+        case .week:
+            return .week
+        case .month:
+            return .month
+        case .year:
+            return .year
+        @unknown default:
+            return nil
         }
     }
 

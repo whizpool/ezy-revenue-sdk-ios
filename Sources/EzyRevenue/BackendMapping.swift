@@ -107,10 +107,19 @@ internal enum BackendMapper {
 
     private static func mapPackage(_ dto: OfferingPackageDTO) throws -> OfferingPackage {
         guard !dto.identifier.isBlank else { throw MappingFailure.invalid }
+        let products = try dto.products.map(mapProduct)
+        guard Set(products.map(\.identifier).filter { !$0.isEmpty }).count == products.count else {
+            throw MappingFailure.invalid
+        }
+        let platformProductIdentifier = dto.platformProductIdentifier?.nonBlank
+        if let platformProductIdentifier,
+           products.contains(where: { $0.identifier != platformProductIdentifier }) {
+            throw MappingFailure.invalid
+        }
         return OfferingPackage(
             identifier: dto.identifier,
-            platformProductIdentifier: dto.platformProductIdentifier?.nonBlank,
-            products: try dto.products.map(mapProduct)
+            platformProductIdentifier: platformProductIdentifier,
+            products: products
         )
     }
 
