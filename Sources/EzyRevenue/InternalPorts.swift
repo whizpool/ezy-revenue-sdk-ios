@@ -86,24 +86,29 @@ extension EzyRevenueBackend {
 
 /// One small persisted record for the active SDK identity and backend session.
 internal struct StoredSession: Codable, Equatable, Sendable {
+    static let currentSchemaVersion = 1
+
     let appUserID: String
     let apiKeyFingerprint: String
     let accessToken: String?
     let createdAt: Date
     let isAuthenticated: Bool
+    let schemaVersion: Int
 
     init(
         appUserID: String,
         apiKeyFingerprint: String,
         accessToken: String?,
         createdAt: Date = Date(),
-        isAuthenticated: Bool = true
+        isAuthenticated: Bool = true,
+        schemaVersion: Int = StoredSession.currentSchemaVersion
     ) {
         self.appUserID = appUserID
         self.apiKeyFingerprint = apiKeyFingerprint
         self.accessToken = accessToken
         self.createdAt = createdAt
         self.isAuthenticated = isAuthenticated
+        self.schemaVersion = schemaVersion
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -112,6 +117,7 @@ internal struct StoredSession: Codable, Equatable, Sendable {
         case accessToken
         case createdAt
         case isAuthenticated
+        case schemaVersion
     }
 
     init(from decoder: Decoder) throws {
@@ -123,6 +129,8 @@ internal struct StoredSession: Codable, Equatable, Sendable {
         // Records written before the identity-only marker existed are active
         // sessions and remain backward compatible.
         isAuthenticated = try container.decodeIfPresent(Bool.self, forKey: .isAuthenticated) ?? true
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion)
+            ?? StoredSession.currentSchemaVersion
     }
 }
 

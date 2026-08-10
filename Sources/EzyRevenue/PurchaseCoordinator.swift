@@ -131,6 +131,9 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
         _ package: OfferingPackage,
         session: SessionCoordinator
     ) async -> EzyRevenueResult<PurchaseFlowResult> {
+        guard package.products.isEmpty || package.products.allSatisfy(\.isActive) else {
+            return .failure(.purchaseFailed)
+        }
         guard case let .success(productID) = CatalogCoordinator.storeKitIdentifier(for: package) else {
             return .failure(.invalidConfiguration(
                 "Offering package StoreKit identifiers must agree"
@@ -148,6 +151,9 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
         let productID = product.identifier.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !productID.isEmpty else {
             return .failure(.invalidConfiguration("product identifier must not be blank"))
+        }
+        guard product.isActive else {
+            return .failure(.purchaseFailed)
         }
         return await purchase(productID: productID, session: session)
     }

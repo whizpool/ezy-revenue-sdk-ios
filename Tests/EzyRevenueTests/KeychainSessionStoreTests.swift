@@ -38,6 +38,23 @@ final class KeychainSessionStoreTests: XCTestCase {
         )
     }
 
+    func testIdentityOnlyRecordRoundTripsWithoutAppearingAuthenticated() async throws {
+        let client = InMemoryKeychainClient()
+        let store = KeychainSessionStore(client: client)
+        let session = StoredSession(
+            appUserID: "$RCAnonymousID:after-logout",
+            apiKeyFingerprint: "fingerprint",
+            accessToken: nil,
+            isAuthenticated: false
+        )
+
+        try await store.save(session)
+        let loaded = try await store.load(apiKeyFingerprint: "fingerprint")
+
+        XCTAssertEqual(loaded, session)
+        XCTAssertFalse(loaded?.isAuthenticated == true)
+    }
+
     func testDifferentAPIKeyFingerprintDoesNotReuseOrDeleteTheRecord() async throws {
         let client = InMemoryKeychainClient()
         let store = KeychainSessionStore(client: client)

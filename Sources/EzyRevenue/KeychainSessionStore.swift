@@ -90,7 +90,9 @@ internal final class KeychainSessionStore: SessionStore, @unchecked Sendable {
 
     private func validate(_ session: StoredSession) throws {
         guard !session.appUserID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !session.apiKeyFingerprint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+              !session.apiKeyFingerprint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              session.createdAt.timeIntervalSince1970 > 0,
+              session.schemaVersion == StoredSession.currentSchemaVersion
         else {
             throw SessionStoreError.invalidRecord
         }
