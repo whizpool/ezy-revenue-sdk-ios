@@ -3,5 +3,6 @@ docs
 DerivedData/
 **/xcuserdata/
 *.xcuserstate
+Example/EzyRevenueSample/Config/Local.xcconfig
 *.xcscmblueprint
 .DS_Store

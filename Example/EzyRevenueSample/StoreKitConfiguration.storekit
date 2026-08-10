@@ -1,0 +1,25 @@
+{
+  "products" : [
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : false,
+      "internalID" : "premium-monthly-internal",
+      "localizations" : [
+        {
+          "description" : "Premium monthly access",
+          "displayName" : "Premium Monthly",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.example.ezyrevenue.premium.monthly",
+      "referenceName" : "Premium Monthly",
+      "recurringSubscriptionPeriod" : "P1M",
+      "subscriptionGroupID" : "premium",
+      "type" : "Auto-Renewable Subscription"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "sample-app-internal"
+  },
+  "version" : 1
+}

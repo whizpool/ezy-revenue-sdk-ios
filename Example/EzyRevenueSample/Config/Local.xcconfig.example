@@ -1,0 +1,4 @@
+// Copy this file to Local.xcconfig (which is gitignored) and fill in
+// development credentials. Never commit the copied file.
+EZY_REVENUE_API_KEY = replace-with-development-api-key
+EZY_REVENUE_APP_USER_ID =

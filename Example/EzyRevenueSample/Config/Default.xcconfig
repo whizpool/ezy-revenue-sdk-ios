@@ -1,0 +1,8 @@
+// Safe defaults for the sample. Put developer-only values in Local.xcconfig;
+// the optional include is intentionally not committed.
+EZY_REVENUE_API_KEY =
+EZY_REVENUE_APP_USER_ID =
+#include? "Local.xcconfig"
+
+INFOPLIST_KEY_EZY_REVENUE_API_KEY = $(EZY_REVENUE_API_KEY)
+INFOPLIST_KEY_EZY_REVENUE_APP_USER_ID = $(EZY_REVENUE_APP_USER_ID)
