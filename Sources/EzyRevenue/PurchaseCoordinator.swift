@@ -124,15 +124,57 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
 
         switch outcome {
         case let .purchased(transaction):
-            guard case .verified = transaction else {
+            guard case let .verified(verifiedTransaction) = transaction else {
                 return .failure(.unverifiedTransaction)
             }
-            return .success(.purchased(transaction.verifiedValue))
+            return await submitReceiptAndFinish(
+                verifiedTransaction,
+                for: generation,
+                session: session
+            )
         case .pending:
             return .success(.pending)
         case .cancelled:
             return .success(.cancelled)
         }
+    }
+
+    @available(macOS 12.0, iOS 15.0, *)
+    private func submitReceiptAndFinish(
+        _ transaction: StoreKitVerifiedTransaction,
+        for generation: SessionGeneration,
+        session: SessionCoordinator
+    ) async -> EzyRevenueResult<PurchaseFlowResult> {
+        guard session.isCurrent(generation) else {
+            return .failure(.notInitialized)
+        }
+
+        let receipt = ReceiptRequest(
+            appUserID: generation.appUserID,
+            productIdentifier: transaction.productID,
+            transactionID: String(transaction.id),
+            receiptData: AppReceiptProvider.base64Receipt(),
+            fetchToken: transaction.jwsRepresentation.nonBlank
+        )
+        let backendResult = await session.executeAuthenticated { [backend] accessToken in
+            do {
+                return try await backend.postReceipt(receipt)
+            } catch {
+                return .failure(.network)
+            }
+        }
+        guard case .success = backendResult else {
+            if case let .failure(error) = backendResult {
+                return .failure(error)
+            }
+            return .failure(.network)
+        }
+
+        guard session.isCurrent(generation) else {
+            return .failure(.notInitialized)
+        }
+        await storeKitGateway.finish(transaction)
+        return .success(.purchased(transaction))
     }
 
     private func releasePurchase(for generation: SessionGeneration) {
@@ -144,14 +186,9 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
     }
 }
 
-@available(macOS 12.0, iOS 15.0, *)
-private extension StoreKitTransactionResult {
-    var verifiedValue: StoreKitVerifiedTransaction {
-        switch self {
-        case let .verified(transaction):
-            return transaction
-        case .unverified:
-            preconditionFailure("Unverified transaction cannot become a purchased result")
-        }
+private extension String {
+    var nonBlank: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
