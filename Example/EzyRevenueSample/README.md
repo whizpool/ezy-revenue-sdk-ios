@@ -12,7 +12,7 @@ Small SwiftUI host app for the local `EzyRevenue` package.
 
 Copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and provide a development API key. The local file is gitignored. The tracked `Config/Default.xcconfig` supplies empty safe defaults for clean checkouts.
 
-In Xcode, select the `EzyRevenueSample` scheme and run with `StoreKitConfiguration.storekit` as the StoreKit Configuration file. The screen demonstrates initialization, offerings, localized package prices, product purchases, customer information, restore, logout, and diagnostic logs.
+In Xcode, select the `EzyRevenueSample` scheme and run with `StoreKitConfiguration.storekit` as the StoreKit Configuration file. The screen demonstrates initialization, offerings, localized package prices, product purchases, customer information, restore, logout, an expandable API request/response panel, and diagnostic logs.
 
 ## Sandbox/TestFlight
 

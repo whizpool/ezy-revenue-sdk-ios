@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import EzyRevenue
 
@@ -39,6 +40,43 @@ struct ContentView: View {
                         }
                         .disabled(!model.isInitialized || model.isBusy)
                     }
+                }
+
+                Section("API response") {
+                    Button {
+                        model.isAPILogPresented = true
+                    } label: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(model.apiLog.type)
+                                    .font(.subheadline.weight(.semibold))
+                                Spacer()
+                                Text(model.apiLog.status)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(model.apiLog.operation)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(model.apiLog.body)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.primary)
+                                .lineLimit(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if model.apiLog.hasLog {
+                                Text("Tap to view the full API log")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(12)
+                        .background(
+                            Color(uiColor: .secondarySystemBackground),
+                            in: RoundedRectangle(cornerRadius: 12)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!model.apiLog.hasLog)
                 }
 
                 Section("Offerings") {
@@ -130,6 +168,9 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("EzyRevenue")
+            .sheet(isPresented: $model.isAPILogPresented) {
+                APILogDetailView(snapshot: model.apiLog)
+            }
         }
     }
 }
@@ -142,6 +183,8 @@ private final class SampleViewModel: ObservableObject {
     @Published var products: [Product] = []
     @Published var customerInfo: CustomerInfo?
     @Published var logs: [String] = []
+    @Published var apiLog = APILogSnapshot()
+    @Published var isAPILogPresented = false
     @Published var isBusy = false
     @Published var isInitialized = false
 
@@ -161,7 +204,7 @@ private final class SampleViewModel: ObservableObject {
                     logLevel: .verbose,
                     onLog: { [weak self] message in
                         Task { @MainActor in
-                            self?.logs.append(message)
+                            self?.appendSDKLog(message)
                         }
                     }
                 )
@@ -236,6 +279,11 @@ private final class SampleViewModel: ObservableObject {
         package.products.first?.price?.displayPrice ?? "Unavailable"
     }
 
+    private func appendSDKLog(_ message: String) {
+        logs.append(message)
+        apiLog.consume(message)
+    }
+
     private func refreshCatalogValues() async {
         let offeringsResult = await sdk.getOfferings()
         let productsResult = await sdk.getProducts()
@@ -294,6 +342,179 @@ private final class SampleViewModel: ObservableObject {
         (Bundle.main.object(forInfoDictionaryKey: key) as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .nilIfEmpty
+    }
+}
+
+private struct APILogSnapshot {
+    var type = "API RESPONSE"
+    var status = "—"
+    var operation = "No API calls yet"
+    var body = "No API calls yet"
+    var fullLog = "No API calls yet"
+    var hasLog = false
+
+    private var requestLines: [String] = []
+    private var responseLines: [String] = []
+    private var currentOperation = "unknown"
+
+    mutating func consume(_ message: String) {
+        let requestPrefix = "backend_request:"
+        let requestBodyPrefix = "backend_request_body:"
+        let responsePrefix = "backend_response:"
+        let responseBodyPrefix = "backend_response_body:"
+        let rejectedPrefix = "backend_response_rejected:"
+        let failedPrefix = "backend_request_failed:"
+        let responseFailedPrefix = "backend_response_failed:"
+
+        if message.hasPrefix(requestPrefix) {
+            let request = value(after: requestPrefix, in: message)
+            currentOperation = operation(for: request)
+            type = "API REQUEST"
+            status = "—"
+            operation = currentOperation
+            body = "(no body)"
+            requestLines = [message]
+            responseLines = []
+            hasLog = true
+            rebuildFullLog()
+            return
+        }
+
+        if message.hasPrefix(requestBodyPrefix) {
+            body = prettyJSON(value(after: requestBodyPrefix, in: message))
+            requestLines.append(message)
+            hasLog = true
+            rebuildFullLog()
+            return
+        }
+
+        if message.hasPrefix(responsePrefix) {
+            type = "API RESPONSE"
+            status = httpStatus(in: message)
+            operation = currentOperation
+            body = "(no body)"
+            responseLines = [message]
+            hasLog = true
+            rebuildFullLog()
+            return
+        }
+
+        if message.hasPrefix(responseBodyPrefix) {
+            type = "API RESPONSE"
+            body = prettyJSON(value(after: responseBodyPrefix, in: message))
+            responseLines.append(message)
+            hasLog = true
+            rebuildFullLog()
+            return
+        }
+
+        if message.hasPrefix(rejectedPrefix) {
+            type = "API RESPONSE"
+            status = httpStatus(in: message)
+            operation = currentOperation
+            if responseLines.isEmpty {
+                body = "(no body)"
+            }
+            responseLines.append(message)
+            hasLog = true
+            rebuildFullLog()
+            return
+        }
+
+        if message.hasPrefix(failedPrefix) || message.hasPrefix(responseFailedPrefix) {
+            type = "API RESPONSE"
+            status = "—"
+            operation = currentOperation
+            body = value(after: message.hasPrefix(failedPrefix) ? failedPrefix : responseFailedPrefix, in: message)
+            responseLines = [message]
+            hasLog = true
+            rebuildFullLog()
+        }
+    }
+
+    private mutating func rebuildFullLog() {
+        fullLog = (requestLines + responseLines).joined(separator: "\n")
+    }
+
+    private func value(after prefix: String, in message: String) -> String {
+        String(message.dropFirst(prefix.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func operation(for request: String) -> String {
+        let parts = request.split(separator: " ", maxSplits: 1).map(String.init)
+        guard parts.count == 2, let url = URL(string: parts[1]) else {
+            return request.isEmpty ? "unknown" : request
+        }
+
+        switch url.path {
+        case "/v1/auth/login":
+            return "login"
+        case "/v1/auth/logout":
+            return "logout"
+        case "/v1/products":
+            return "products"
+        case "/v1/receipts":
+            return "receipts"
+        default:
+            if url.path.hasSuffix("/offerings") {
+                return "offerings"
+            }
+            if url.path.hasPrefix("/v1/subscribers/") {
+                return "customerInfo"
+            }
+            return url.path.isEmpty ? request : url.path
+        }
+    }
+
+    private func httpStatus(in message: String) -> String {
+        guard let range = message.range(of: "status=") else { return "—" }
+        let code = message[range.upperBound...].prefix { $0.isNumber }
+        return code.isEmpty ? "—" : "HTTP \(code)"
+    }
+
+    private func prettyJSON(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "(no body)" }
+        guard let data = trimmed.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(
+                  with: data,
+                  options: [.fragmentsAllowed]
+              ),
+              let prettyData = try? JSONSerialization.data(
+                  withJSONObject: object,
+                  options: [.prettyPrinted, .sortedKeys]
+              ),
+              let pretty = String(data: prettyData, encoding: .utf8) else {
+            return trimmed
+        }
+        return pretty
+    }
+}
+
+private struct APILogDetailView: View {
+    let snapshot: APILogSnapshot
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                Text(snapshot.fullLog)
+                    .font(.system(.caption, design: .monospaced))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .padding()
+            }
+            .navigationTitle("Latest API log")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
+            }
+        }
     }
 }
 
