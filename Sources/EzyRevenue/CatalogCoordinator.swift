@@ -54,6 +54,42 @@ internal final class CatalogCoordinator: @unchecked Sendable {
         return true
     }
 
+    /// Loads backend-authoritative customer information for the active user.
+    func loadCustomerInfo(
+        session: SessionCoordinator
+    ) async -> EzyRevenueResult<CustomerInfo> {
+        guard let generation = session.captureGeneration() else {
+            return .failure(.notInitialized)
+        }
+        let backendResult = await session.executeAuthenticated { [backend] accessToken in
+            do {
+                return try await backend.fetchCustomerInfo(
+                    appUserID: generation.appUserID,
+                    accessToken: accessToken
+                )
+            } catch {
+                return .failure(.network)
+            }
+        }
+        guard case let .success(_, body) = backendResult else {
+            if case let .failure(error) = backendResult {
+                return .failure(error)
+            }
+            return .failure(.network)
+        }
+        guard case let .success(customerInfo) = BackendMapper.mapCustomerInfo(from: body) else {
+            return .failure(.invalidResponse)
+        }
+        guard commitCustomerInfo(
+            customerInfo,
+            for: generation,
+            session: session
+        ) else {
+            return .failure(.notInitialized)
+        }
+        return .success(customerInfo)
+    }
+
     /// Loads offerings for the active identity, then enriches their products
     /// with one batched StoreKit lookup before committing the snapshot.
     @available(macOS 12.0, iOS 15.0, *)

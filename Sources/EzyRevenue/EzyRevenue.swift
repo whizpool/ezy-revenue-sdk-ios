@@ -153,8 +153,13 @@ public actor EzyRevenue {
     /// Fetches backend-authoritative customer information.
     public func getCustomerInfo() async -> EzyRevenueResult<CustomerInfo> {
         guard initialized else { return notInitialized(operation: "getCustomerInfo") }
-        logger.error("getCustomerInfo_failed: Runtime wiring is not available yet")
-        return .failure(.internalError("Runtime wiring is not available yet"))
+        let result = await component.catalogCoordinator.loadCustomerInfo(
+            session: component.sessionCoordinator
+        )
+        if case let .failure(error) = result {
+            logger.error("getCustomerInfo_failed: \(error.localizedDescription)")
+        }
+        return result
     }
 
     /// Purchases an offering package.
