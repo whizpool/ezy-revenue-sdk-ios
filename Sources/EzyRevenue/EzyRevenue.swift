@@ -210,8 +210,25 @@ public actor EzyRevenue {
     /// Restores purchases without initiating a new charge.
     public func restorePurchases() async -> EzyRevenueResult<CustomerInfo> {
         guard initialized else { return notInitialized(operation: "restorePurchases") }
-        logger.error("restorePurchases_failed: Runtime wiring is not available yet")
-        return .failure(.internalError("Runtime wiring is not available yet"))
+        guard #available(macOS 12.0, iOS 15.0, *) else {
+            logger.error("restorePurchases_failed: StoreKit 2 requires iOS 15")
+            return .failure(.billingUnavailable)
+        }
+        let restoreResult = await component.purchaseCoordinator.restorePurchases(
+            session: component.sessionCoordinator
+        )
+        if case let .failure(error) = restoreResult {
+            logger.error("restorePurchases_failed: \(error.localizedDescription)")
+            return .failure(error)
+        }
+
+        let customerResult = await component.catalogCoordinator.loadCustomerInfo(
+            session: component.sessionCoordinator
+        )
+        if case let .failure(error) = customerResult {
+            logger.error("restorePurchases_failed: \(error.localizedDescription)")
+        }
+        return customerResult
     }
 
     /// Ends the active SDK session and clears local runtime state.

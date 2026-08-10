@@ -52,7 +52,7 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
             let updates = await storeKitGateway.transactionUpdates()
             for await update in updates {
                 guard !Task.isCancelled else { break }
-                await self?.processTransaction(
+                _ = await self?.processTransaction(
                     update,
                     session: session,
                     listenerEpoch: listenerEpoch
@@ -69,8 +69,60 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
     func recoverUnfinishedTransactions(session: SessionCoordinator) async {
         let unfinished = await storeKitGateway.unfinishedTransactions()
         for transaction in unfinished {
-            await processTransaction(transaction, session: session, listenerEpoch: nil)
+            _ = await processTransaction(transaction, session: session, listenerEpoch: nil)
         }
+    }
+
+    /// Synchronizes the App Store and processes both unfinished work and
+    /// current entitlements through the same receipt submission path.
+    @available(macOS 12.0, iOS 15.0, *)
+    func restorePurchases(session: SessionCoordinator) async -> EzyRevenueResult<Void> {
+        guard let generation = session.captureGeneration() else {
+            return .failure(.notInitialized)
+        }
+        do {
+            try await storeKitGateway.syncStore()
+        } catch {
+            return .failure(.network)
+        }
+        guard session.isCurrent(generation) else {
+            return .failure(.notInitialized)
+        }
+
+        var firstFailure: EzyRevenueError?
+        let unfinished = await storeKitGateway.unfinishedTransactions()
+        for transaction in unfinished {
+            let result = await processTransaction(
+                transaction,
+                session: session,
+                listenerEpoch: nil,
+                force: false
+            )
+            if case let .failure(error) = result, firstFailure == nil {
+                firstFailure = error
+            }
+        }
+
+        let currentEntitlements = await storeKitGateway.currentEntitlements()
+        for transaction in currentEntitlements {
+            let result = await processTransaction(
+                transaction,
+                session: session,
+                listenerEpoch: nil,
+                force: true
+            )
+            if case let .failure(error) = result, firstFailure == nil {
+                firstFailure = error
+            }
+        }
+
+        guard session.isCurrent(generation) else {
+            return .failure(.notInitialized)
+        }
+        if let firstFailure {
+            return .failure(firstFailure)
+        }
+        return .success(())
     }
 
     /// Purchases the StoreKit product represented by an offering package.
@@ -212,16 +264,26 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
     private func processTransaction(
         _ result: StoreKitTransactionResult,
         session: SessionCoordinator,
-        listenerEpoch: UInt64?
-    ) async {
-        guard listenerEpoch.map(isCurrentListenerEpoch) ?? true,
-              case let .verified(transaction) = result,
-              let generation = session.captureGeneration(),
-              session.isCurrent(generation),
-              markTransactionForProcessing(transaction.id) else {
+        listenerEpoch: UInt64?,
+        force: Bool = false
+    ) async -> EzyRevenueResult<Void> {
+        guard listenerEpoch.map(isCurrentListenerEpoch) ?? true else {
+            return .failure(.notInitialized)
+        }
+        guard case let .verified(transaction) = result else {
             // Unverified transactions are intentionally ignored and never
             // finished or treated as a purchase.
-            return
+            return .success(())
+        }
+        guard let generation = session.captureGeneration(),
+              session.isCurrent(generation) else {
+            return .failure(.notInitialized)
+        }
+        if force, isTransactionAlreadyProcessed(transaction.id) {
+            return .success(())
+        }
+        guard markTransactionForProcessing(transaction.id) else {
+            return .success(())
         }
 
         do {
@@ -233,18 +295,21 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
                     listenerEpoch: listenerEpoch
                 )
             }
-            if case .failure = submission {
+            if case let .failure(error) = submission {
                 // A failed backend result leaves the transaction unfinished
                 // and must be retried by a future recovery pass.
                 removeTransactionFromProcessing(transaction.id)
+                return .failure(error)
             }
         } catch {
             removeTransactionFromProcessing(transaction.id)
-            return
+            return .failure(.network)
         }
-        if !session.isCurrent(generation) {
+        guard session.isCurrent(generation) else {
             removeTransactionFromProcessing(transaction.id)
+            return .failure(.notInitialized)
         }
+        return .success(())
     }
 
     @available(macOS 12.0, iOS 15.0, *)
@@ -292,6 +357,12 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
         stateLock.lock()
         defer { stateLock.unlock() }
         return transactionListenerEpoch == epoch
+    }
+
+    private func isTransactionAlreadyProcessed(_ transactionID: UInt64) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return processedTransactionIDs.contains(transactionID)
     }
 
     private func markTransactionForProcessing(_ transactionID: UInt64) -> Bool {
