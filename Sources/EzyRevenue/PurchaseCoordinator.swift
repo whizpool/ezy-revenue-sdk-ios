@@ -7,13 +7,18 @@ internal enum PurchaseFlowResult: Sendable {
     case cancelled
 }
 
-/// Owns the single active purchase slot for one SDK runtime.
+/// Owns the single active purchase slot, transaction recovery, and the live
+/// StoreKit update listener for one SDK runtime.
 internal final class PurchaseCoordinator: @unchecked Sendable {
     let backend: any EzyRevenueBackend
     let storeKitGateway: any StoreKitGateway
 
+    private let operationGate = AsyncOperationGate()
     private let stateLock = NSLock()
     private var activePurchaseGeneration: SessionGeneration?
+    private var processedTransactionIDs: Set<UInt64> = []
+    private var transactionListenerTask: Task<Void, Never>?
+    private var transactionListenerEpoch: UInt64 = 0
 
     init(
         backend: any EzyRevenueBackend,
@@ -23,10 +28,49 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
         self.storeKitGateway = storeKitGateway
     }
 
+    deinit {
+        transactionListenerTask?.cancel()
+    }
+
     var isPurchaseInProgress: Bool {
         stateLock.lock()
         defer { stateLock.unlock() }
         return activePurchaseGeneration != nil
+    }
+
+    /// Starts the one live StoreKit update consumer for this runtime.
+    @available(macOS 12.0, iOS 15.0, *)
+    func startTransactionListener(session: SessionCoordinator) {
+        stateLock.lock()
+        guard transactionListenerTask == nil else {
+            stateLock.unlock()
+            return
+        }
+        transactionListenerEpoch &+= 1
+        let listenerEpoch = transactionListenerEpoch
+        let task = Task { [weak self, storeKitGateway] in
+            let updates = await storeKitGateway.transactionUpdates()
+            for await update in updates {
+                guard !Task.isCancelled else { break }
+                await self?.processTransaction(
+                    update,
+                    session: session,
+                    listenerEpoch: listenerEpoch
+                )
+            }
+        }
+        transactionListenerTask = task
+        stateLock.unlock()
+    }
+
+    /// Processes StoreKit unfinished work during initialization. Failed
+    /// submissions are deliberately left unfinished for a later retry.
+    @available(macOS 12.0, iOS 15.0, *)
+    func recoverUnfinishedTransactions(session: SessionCoordinator) async {
+        let unfinished = await storeKitGateway.unfinishedTransactions()
+        for transaction in unfinished {
+            await processTransaction(transaction, session: session, listenerEpoch: nil)
+        }
     }
 
     /// Purchases the StoreKit product represented by an offering package.
@@ -87,11 +131,29 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
     func clear() {
         stateLock.lock()
         activePurchaseGeneration = nil
+        processedTransactionIDs.removeAll()
+        transactionListenerEpoch &+= 1
+        transactionListenerTask?.cancel()
+        transactionListenerTask = nil
         stateLock.unlock()
     }
 
     @available(macOS 12.0, iOS 15.0, *)
     private func purchase(
+        productID: String,
+        session: SessionCoordinator
+    ) async -> EzyRevenueResult<PurchaseFlowResult> {
+        do {
+            return try await operationGate.withLock { [self] in
+                await purchaseLocked(productID: productID, session: session)
+            }
+        } catch {
+            return .failure(.purchaseFailed)
+        }
+    }
+
+    @available(macOS 12.0, iOS 15.0, *)
+    private func purchaseLocked(
         productID: String,
         session: SessionCoordinator
     ) async -> EzyRevenueResult<PurchaseFlowResult> {
@@ -127,11 +189,18 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
             guard case let .verified(verifiedTransaction) = transaction else {
                 return .failure(.unverifiedTransaction)
             }
-            return await submitReceiptAndFinish(
+            guard markTransactionForProcessing(verifiedTransaction.id) else {
+                return .success(.purchased(verifiedTransaction))
+            }
+            let result = await submitReceiptAndFinish(
                 verifiedTransaction,
                 for: generation,
                 session: session
             )
+            if case .failure = result {
+                removeTransactionFromProcessing(verifiedTransaction.id)
+            }
+            return result
         case .pending:
             return .success(.pending)
         case .cancelled:
@@ -140,12 +209,53 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
     }
 
     @available(macOS 12.0, iOS 15.0, *)
+    private func processTransaction(
+        _ result: StoreKitTransactionResult,
+        session: SessionCoordinator,
+        listenerEpoch: UInt64?
+    ) async {
+        guard listenerEpoch.map(isCurrentListenerEpoch) ?? true,
+              case let .verified(transaction) = result,
+              let generation = session.captureGeneration(),
+              session.isCurrent(generation),
+              markTransactionForProcessing(transaction.id) else {
+            // Unverified transactions are intentionally ignored and never
+            // finished or treated as a purchase.
+            return
+        }
+
+        do {
+            let submission = try await operationGate.withLock { [self] in
+                await submitReceiptAndFinish(
+                    transaction,
+                    for: generation,
+                    session: session,
+                    listenerEpoch: listenerEpoch
+                )
+            }
+            if case .failure = submission {
+                // A failed backend result leaves the transaction unfinished
+                // and must be retried by a future recovery pass.
+                removeTransactionFromProcessing(transaction.id)
+            }
+        } catch {
+            removeTransactionFromProcessing(transaction.id)
+            return
+        }
+        if !session.isCurrent(generation) {
+            removeTransactionFromProcessing(transaction.id)
+        }
+    }
+
+    @available(macOS 12.0, iOS 15.0, *)
     private func submitReceiptAndFinish(
         _ transaction: StoreKitVerifiedTransaction,
         for generation: SessionGeneration,
-        session: SessionCoordinator
+        session: SessionCoordinator,
+        listenerEpoch: UInt64? = nil
     ) async -> EzyRevenueResult<PurchaseFlowResult> {
-        guard session.isCurrent(generation) else {
+        guard listenerEpoch.map(isCurrentListenerEpoch) ?? true,
+              session.isCurrent(generation) else {
             return .failure(.notInitialized)
         }
 
@@ -156,7 +266,7 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
             receiptData: AppReceiptProvider.base64Receipt(),
             fetchToken: transaction.jwsRepresentation.nonBlank
         )
-        let backendResult = await session.executeAuthenticated { [backend] accessToken in
+        let backendResult = await session.executeAuthenticated { [backend] _ in
             do {
                 return try await backend.postReceipt(receipt)
             } catch {
@@ -170,11 +280,30 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
             return .failure(.network)
         }
 
-        guard session.isCurrent(generation) else {
+        guard listenerEpoch.map(isCurrentListenerEpoch) ?? true,
+              session.isCurrent(generation) else {
             return .failure(.notInitialized)
         }
         await storeKitGateway.finish(transaction)
         return .success(.purchased(transaction))
+    }
+
+    private func isCurrentListenerEpoch(_ epoch: UInt64) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return transactionListenerEpoch == epoch
+    }
+
+    private func markTransactionForProcessing(_ transactionID: UInt64) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return processedTransactionIDs.insert(transactionID).inserted
+    }
+
+    private func removeTransactionFromProcessing(_ transactionID: UInt64) {
+        stateLock.lock()
+        processedTransactionIDs.remove(transactionID)
+        stateLock.unlock()
     }
 
     private func releasePurchase(for generation: SessionGeneration) {

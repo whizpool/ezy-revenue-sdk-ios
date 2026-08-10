@@ -108,6 +108,11 @@ public actor EzyRevenue {
         if case .success = result {
             component.catalogCoordinator.clear()
             component.purchaseCoordinator.clear()
+            if #available(macOS 12.0, iOS 15.0, *) {
+                component.purchaseCoordinator.startTransactionListener(
+                    session: component.sessionCoordinator
+                )
+            }
             initialized = true
             logger.info("logIn_succeeded")
         } else {
@@ -263,6 +268,14 @@ public actor EzyRevenue {
             configuredAPIKeyFingerprint = fingerprint
             userCountryCode = configuration.userCountryCode
             initialized = true
+            if #available(macOS 12.0, iOS 15.0, *) {
+                component.purchaseCoordinator.startTransactionListener(
+                    session: component.sessionCoordinator
+                )
+                await component.purchaseCoordinator.recoverUnfinishedTransactions(
+                    session: component.sessionCoordinator
+                )
+            }
             logger.info("initialize_succeeded")
         } else {
             initialized = false
