@@ -132,6 +132,3 @@ internal enum SessionStoreError: Error, Equatable, Sendable {
     case invalidRecord
     case keychainStatus(Int32)
 }
-
-/// StoreKit boundary used by catalog and purchase flows.
-internal protocol StoreKitGateway: Sendable {}

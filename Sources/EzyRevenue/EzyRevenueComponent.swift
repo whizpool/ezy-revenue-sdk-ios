@@ -11,6 +11,10 @@ internal final class EzyRevenueComponent {
     let catalogCoordinator: CatalogCoordinator
     let purchaseCoordinator: PurchaseCoordinator
 
+    deinit {
+        storeKitGateway.shutdown()
+    }
+
     init(
         backend: any EzyRevenueBackend,
         sessionStore: any SessionStore,
@@ -62,7 +66,7 @@ internal final class EzyRevenueComponent {
         return EzyRevenueComponent(
             backend: backend,
             sessionStore: KeychainSessionStore(logger: logger),
-            storeKitGateway: UnavailableStoreKitGateway(),
+            storeKitGateway: StoreKit2Gateway(),
             logger: logger
         )
     }
