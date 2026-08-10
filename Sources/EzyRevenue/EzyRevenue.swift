@@ -14,6 +14,7 @@ public actor EzyRevenue {
     private var initialized = false
     private var logger = EzyRevenueLogger(level: .none)
     private var configuredAPIKeyFingerprint: String?
+    private var userCountryCode: String?
     private var initializationTask: Task<EzyRevenueResult<Void>, Never>?
 
     /// Creates the internal runtime instance used by the shared facade and tests.
@@ -118,15 +119,35 @@ public actor EzyRevenue {
     /// Fetches offerings for the active identity.
     public func getOfferings() async -> EzyRevenueResult<[Offering]> {
         guard initialized else { return notInitialized(operation: "getOfferings") }
-        logger.error("getOfferings_failed: Runtime wiring is not available yet")
-        return .failure(.internalError("Runtime wiring is not available yet"))
+        guard #available(macOS 12.0, iOS 15.0, *) else {
+            logger.error("getOfferings_failed: StoreKit 2 requires iOS 15")
+            return .failure(.billingUnavailable)
+        }
+        let metadata = await MetadataProvider.current(userCountryCode: userCountryCode)
+        let result = await component.catalogCoordinator.loadOfferings(
+            countryCode: metadata.preferredCountryCode,
+            session: component.sessionCoordinator
+        )
+        if case let .failure(error) = result {
+            logger.error("getOfferings_failed: \(error.localizedDescription)")
+        }
+        return result
     }
 
     /// Fetches the complete product catalog.
     public func getProducts() async -> EzyRevenueResult<[Product]> {
         guard initialized else { return notInitialized(operation: "getProducts") }
-        logger.error("getProducts_failed: Runtime wiring is not available yet")
-        return .failure(.internalError("Runtime wiring is not available yet"))
+        guard #available(macOS 12.0, iOS 15.0, *) else {
+            logger.error("getProducts_failed: StoreKit 2 requires iOS 15")
+            return .failure(.billingUnavailable)
+        }
+        let result = await component.catalogCoordinator.loadProducts(
+            session: component.sessionCoordinator
+        )
+        if case let .failure(error) = result {
+            logger.error("getProducts_failed: \(error.localizedDescription)")
+        }
+        return result
     }
 
     /// Fetches backend-authoritative customer information.
@@ -204,12 +225,18 @@ public actor EzyRevenue {
             component.sessionCoordinator.updateLogger(logger)
         }
 
+        let previousAppUserID = component.sessionCoordinator.appUserID
         let result = await component.sessionCoordinator.initialize(
             apiKeyFingerprint: fingerprint,
             requestedAppUserID: configuration.appUserID
         )
         if case .success = result {
+            if previousAppUserID != component.sessionCoordinator.appUserID {
+                component.catalogCoordinator.clear()
+                component.purchaseCoordinator.clear()
+            }
             configuredAPIKeyFingerprint = fingerprint
+            userCountryCode = configuration.userCountryCode
             initialized = true
             logger.info("initialize_succeeded")
         } else {

@@ -1,5 +1,5 @@
 /// Owns in-memory catalog and customer snapshots for one SDK runtime.
-internal final class CatalogCoordinator {
+internal final class CatalogCoordinator: @unchecked Sendable {
     let backend: any EzyRevenueBackend
     let storeKitGateway: any StoreKitGateway
 
@@ -52,6 +52,86 @@ internal final class CatalogCoordinator {
         guard session.isCurrent(generation) else { return false }
         self.customerInfo = customerInfo
         return true
+    }
+
+    /// Loads offerings for the active identity, then enriches their products
+    /// with one batched StoreKit lookup before committing the snapshot.
+    @available(macOS 12.0, iOS 15.0, *)
+    func loadOfferings(
+        countryCode: String?,
+        session: SessionCoordinator
+    ) async -> EzyRevenueResult<[Offering]> {
+        guard let generation = session.captureGeneration() else {
+            return .failure(.notInitialized)
+        }
+        let backendResult = await session.executeAuthenticated { [backend] accessToken in
+            do {
+                return try await backend.fetchOfferings(
+                    appUserID: generation.appUserID,
+                    countryCode: countryCode,
+                    accessToken: accessToken
+                )
+            } catch {
+                return .failure(.network)
+            }
+        }
+        guard case let .success(_, body) = backendResult else {
+            if case let .failure(error) = backendResult {
+                return .failure(error)
+            }
+            return .failure(.network)
+        }
+        guard case let .success(snapshot) = BackendMapper.mapOfferings(from: body) else {
+            return .failure(.invalidResponse)
+        }
+
+        let enriched = await enrichOfferings(snapshot.offerings)
+        let currentIdentifier = snapshot.currentOffering?.identifier
+        let current = enriched.first {
+            $0.identifier == currentIdentifier
+        }
+        guard commitOfferings(
+            enriched,
+            currentOffering: current,
+            for: generation,
+            session: session
+        ) else {
+            return .failure(.notInitialized)
+        }
+        return .success(enriched)
+    }
+
+    /// Loads the complete backend product catalog and enriches it with one
+    /// batched StoreKit lookup before committing the snapshot.
+    @available(macOS 12.0, iOS 15.0, *)
+    func loadProducts(
+        session: SessionCoordinator
+    ) async -> EzyRevenueResult<[Product]> {
+        guard let generation = session.captureGeneration() else {
+            return .failure(.notInitialized)
+        }
+        let backendResult = await session.executeAuthenticated { [backend] _ in
+            do {
+                return try await backend.fetchProducts()
+            } catch {
+                return .failure(.network)
+            }
+        }
+        guard case let .success(_, body) = backendResult else {
+            if case let .failure(error) = backendResult {
+                return .failure(error)
+            }
+            return .failure(.network)
+        }
+        guard case let .success(products) = BackendMapper.mapProducts(from: body) else {
+            return .failure(.invalidResponse)
+        }
+
+        let enriched = await enrichProducts(products)
+        guard commitProducts(enriched, for: generation, session: session) else {
+            return .failure(.notInitialized)
+        }
+        return .success(enriched)
     }
 
     /// Loads StoreKit details in one batch and enriches backend products. A
