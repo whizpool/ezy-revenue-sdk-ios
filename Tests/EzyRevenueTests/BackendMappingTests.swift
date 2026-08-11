@@ -161,6 +161,40 @@ final class BackendMappingTests: XCTestCase {
         XCTAssertTrue(productsValue.isEmpty)
     }
 
+    func testProductsAcceptBackendNameStatusAndGroupAliases() throws {
+        let data = Data(
+            """
+            {
+              "success": true,
+              "data": [{
+                "productId": "product-monthly",
+                "identifier": "com.whizpool.ezyrevenue.sample.premium.monthly",
+                "name": "Monthly",
+                "type": "SUBSCRIPTION",
+                "group": null,
+                "status": "MISSING_METADATA",
+                "appleFamilySharable": false,
+                "appleSubscriptionPeriod": "ONE_MONTH",
+                "googleBasePlanId": null,
+                "googleSubscriptionId": null
+              }]
+            }
+            """.utf8
+        )
+
+        guard case let .success(products) = BackendMapper.mapProducts(from: data) else {
+            return XCTFail("Expected backend product aliases to map successfully")
+        }
+
+        let product = try XCTUnwrap(products.first)
+        XCTAssertEqual(product.productID, "product-monthly")
+        XCTAssertEqual(product.identifier, "com.whizpool.ezyrevenue.sample.premium.monthly")
+        XCTAssertEqual(product.displayName, "Monthly")
+        XCTAssertEqual(product.storeStatus, .unknown("MISSING_METADATA"))
+        XCTAssertFalse(product.isActive)
+        XCTAssertNil(product.productGroup)
+    }
+
     func testProductNormalizationIsCaseInsensitiveButExplicitActivityWins() {
         let data = Data(
             """

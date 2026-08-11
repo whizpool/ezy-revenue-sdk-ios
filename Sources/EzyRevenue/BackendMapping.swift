@@ -342,12 +342,60 @@ private struct ProductDTO: Decodable {
         case productID = "productId"
         case identifier
         case displayName
+        case name
         case type
         case storeStatus
+        case status
         case productGroup
+        case group
         case isActive
         case price
         case introductoryPrice
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        productID = try container.decodeIfPresent(String.self, forKey: .productID)
+        identifier = try container.decode(String.self, forKey: .identifier)
+        displayName = try Self.decodeRequiredAlias(
+            from: container,
+            primary: .displayName,
+            fallback: .name
+        )
+        type = try container.decode(String.self, forKey: .type)
+        storeStatus = try Self.decodeRequiredAlias(
+            from: container,
+            primary: .storeStatus,
+            fallback: .status
+        )
+        productGroup = try container.decodeIfPresent(String.self, forKey: .productGroup)
+            ?? container.decodeIfPresent(String.self, forKey: .group)
+        isActive = try container.decodeIfPresent(Bool.self, forKey: .isActive)
+        price = try container.decodeIfPresent(PriceDTO.self, forKey: .price)
+        introductoryPrice = try container.decodeIfPresent(
+            PriceDTO.self,
+            forKey: .introductoryPrice
+        )
+    }
+
+    private static func decodeRequiredAlias(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        primary: CodingKeys,
+        fallback: CodingKeys
+    ) throws -> String {
+        if let value = try container.decodeIfPresent(String.self, forKey: primary) {
+            return value
+        }
+        if let value = try container.decodeIfPresent(String.self, forKey: fallback) {
+            return value
+        }
+        throw DecodingError.keyNotFound(
+            primary,
+            DecodingError.Context(
+                codingPath: container.codingPath,
+                debugDescription: "Missing required product field"
+            )
+        )
     }
 }
 
