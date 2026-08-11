@@ -3,7 +3,7 @@ import Foundation
 /// Fixed-host URLSession adapter for the EzyRevenue backend.
 @available(macOS 12.0, iOS 15.0, *)
 internal final class URLSessionEzyRevenueBackend: EzyRevenueBackend, @unchecked Sendable {
-    static let productionBaseURL = URL(string: "http://192.168.0.249:3000")!
+    static let productionBaseURL = URL(string: "https://api-ezyrevenue.doctors-finder.com")!
 
     private let apiKey: String
     private let baseURL: URL
