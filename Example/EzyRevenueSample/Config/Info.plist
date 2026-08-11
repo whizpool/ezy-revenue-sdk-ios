@@ -22,6 +22,21 @@
 	<string>$(EZY_REVENUE_API_KEY)</string>
 	<key>EZY_REVENUE_APP_USER_ID</key>
 	<string>$(EZY_REVENUE_APP_USER_ID)</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>192.168.0.249</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect to the local EzyRevenue development server.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchScreen</key>

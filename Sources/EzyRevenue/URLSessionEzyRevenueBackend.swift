@@ -3,7 +3,7 @@ import Foundation
 /// Fixed-host URLSession adapter for the EzyRevenue backend.
 @available(macOS 12.0, iOS 15.0, *)
 internal final class URLSessionEzyRevenueBackend: EzyRevenueBackend, @unchecked Sendable {
-    static let productionBaseURL = URL(string: "https://api-ezyrevenue.doctors-finder.com")!
+    static let productionBaseURL = URL(string: "http://192.168.0.249:3000")!
 
     private let apiKey: String
     private let baseURL: URL
@@ -138,6 +138,13 @@ internal final class URLSessionEzyRevenueBackend: EzyRevenueBackend, @unchecked 
         if let accessToken = accessToken?.nonBlank {
             request.setValue(accessToken, forHTTPHeaderField: "X-App-Access-Token")
         }
+
+        #if DEBUG
+        logger.verbose("backend_authorization: Bearer \(apiKey)")
+        if let accessToken = accessToken?.nonBlank {
+            logger.verbose("backend_app_access_token: \(accessToken)")
+        }
+        #endif
 
         let metadata = await metadataProvider()
         if let value = metadata.sdkVersion.nonBlank {
