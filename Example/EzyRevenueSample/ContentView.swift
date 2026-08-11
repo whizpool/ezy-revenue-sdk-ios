@@ -18,8 +18,8 @@ struct ContentView: View {
                     .disabled(model.isBusy)
 
                     HStack {
-                        Button("Refresh catalog") {
-                            model.refreshCatalog()
+                        Button("Load offerings and products") {
+                            model.loadCatalog()
                         }
                         .disabled(!model.isInitialized || model.isBusy)
 
@@ -98,7 +98,10 @@ struct ContentView: View {
                                     model.purchase(package: package)
                                 } label: {
                                     HStack {
-                                        Text(package.identifier)
+                                        Text(
+                                            "Subscribe: \(model.displayName(for: package))" +
+                                                (offering.isDefault ? " (default offering)" : "")
+                                        )
                                         Spacer()
                                         Text(model.displayPrice(for: package))
                                     }
@@ -115,26 +118,21 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
                     ForEach(model.products, id: \.identifier) { product in
-                        Button {
-                            model.purchase(product: product)
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(product.displayName)
-                                    Text(product.identifier)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                VStack(alignment: .trailing) {
-                                    Text(product.price?.displayPrice ?? "Unavailable")
-                                    Text(product.isAvailableInAppStore ? "Available" : "Unavailable")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(product.displayName)
+                                Text(product.identifier)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing) {
+                                Text(product.price?.displayPrice ?? "Unavailable")
+                                Text(product.isAvailableInAppStore ? "Available" : "Unavailable")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         }
-                        .disabled(!model.isInitialized || model.isBusy)
                     }
                 }
 
@@ -197,13 +195,11 @@ private final class SampleViewModel: ObservableObject {
     @Published var isInitialized = false
 
     private let sdk = EzyRevenue.shared
+    private let sampleAPIKey = "YOUR_EZY_REVENUE_SDK_KEY"
 
     func initialize() {
         perform("Initialize") {
-            guard let apiKey = self.infoValue("EZY_REVENUE_API_KEY"), !apiKey.isEmpty else {
-                self.status = "Missing EZY_REVENUE_API_KEY in the local xcconfig."
-                return
-            }
+            let apiKey = self.infoValue("EZY_REVENUE_API_KEY") ?? self.sampleAPIKey
             let appUserID = self.infoValue("EZY_REVENUE_APP_USER_ID")
             let result = await self.sdk.initialize(
                 configuration: EzyRevenueConfiguration(
@@ -220,16 +216,15 @@ private final class SampleViewModel: ObservableObject {
             guard case let .failure(error) = result else {
                 self.isInitialized = true
                 self.status = "Initialized as \(await self.sdk.appUserID ?? "unknown user")"
-                await self.refreshCatalogValues()
                 return
             }
             self.status = "Initialization failed: \(error.localizedDescription)"
         }
     }
 
-    func refreshCatalog() {
-        perform("Refresh catalog") {
-            await self.refreshCatalogValues()
+    func loadCatalog() {
+        perform("Load offerings and products") {
+            await self.loadCatalogValues()
         }
     }
 
@@ -243,13 +238,6 @@ private final class SampleViewModel: ObservableObject {
     func purchase(package: OfferingPackage) {
         perform("Purchase") {
             let result = await self.sdk.purchasePackage(package)
-            await self.applyPurchaseResult(result)
-        }
-    }
-
-    func purchase(product: Product) {
-        perform("Purchase") {
-            let result = await self.sdk.purchaseProduct(product)
             await self.applyPurchaseResult(result)
         }
     }
@@ -283,6 +271,12 @@ private final class SampleViewModel: ObservableObject {
         }
     }
 
+    func displayName(for package: OfferingPackage) -> String {
+        package.products.first?.displayName
+            ?? package.platformProductIdentifier
+            ?? package.identifier
+    }
+
     func displayPrice(for package: OfferingPackage) -> String {
         package.products.first?.price?.displayPrice ?? "Unavailable"
     }
@@ -292,23 +286,30 @@ private final class SampleViewModel: ObservableObject {
         apiLog.consume(message)
     }
 
-    private func refreshCatalogValues() async {
+    private func loadCatalogValues() async {
         let offeringsResult = await sdk.getOfferings()
         let productsResult = await sdk.getProducts()
+        var packageCount: Int?
+        var productCount: Int?
+
         switch offeringsResult {
         case let .success(offerings):
             self.offerings = offerings
+            packageCount = offerings.reduce(0) { $0 + $1.packages.count }
         case let .failure(error):
             self.status = "Offerings failed: \(error.localizedDescription)"
         }
         switch productsResult {
         case let .success(products):
             self.products = products
+            productCount = products.count
         case let .failure(error):
             self.status = "Products failed: \(error.localizedDescription)"
         }
-        let customerResult = await sdk.getCustomerInfo()
-        applyCustomerResult(customerResult)
+
+        if let packageCount, let productCount {
+            self.status = "Loaded \(packageCount) packages and \(productCount) products"
+        }
     }
 
     private func applyCustomerResult(_ result: EzyRevenueResult<CustomerInfo>) {
@@ -325,11 +326,15 @@ private final class SampleViewModel: ObservableObject {
     ) async {
         switch result {
         case let .success(outcome):
-            self.purchaseState = "Purchase: \(String(describing: outcome))"
+            let message = "Purchase: \(String(describing: outcome))"
+            self.purchaseState = message
+            self.status = message
             let customerResult = await sdk.getCustomerInfo()
             applyCustomerResult(customerResult)
         case let .failure(error):
-            self.purchaseState = "Purchase failed: \(error.localizedDescription)"
+            let message = "Purchase failed: \(error.localizedDescription)"
+            self.purchaseState = message
+            self.status = message
         }
     }
 

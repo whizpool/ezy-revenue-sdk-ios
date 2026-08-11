@@ -6,13 +6,13 @@ Small SwiftUI host app for the local `EzyRevenue` package.
 - Deployment target: iOS 15+
 - StoreKit Configuration: `StoreKitConfiguration.storekit`
 - SDK logging is selected once during initialization (`.verbose` in this diagnostic sample).
-- Credentials are read from Info.plist values supplied by an xcconfig, never from Swift source.
+- The API key may be supplied through an xcconfig; the sample also contains its development fallback.
 
 ## Local configuration
 
 Copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and provide a development API key. The local file is gitignored. The tracked `Config/Default.xcconfig` supplies empty safe defaults for clean checkouts.
 
-In Xcode, select the `EzyRevenueSample` scheme and run with `StoreKitConfiguration.storekit` as the StoreKit Configuration file. The screen demonstrates initialization, offerings, localized package prices, product purchases, customer information, restore, logout, an expandable API request/response panel, and diagnostic logs.
+In Xcode, select the `EzyRevenueSample` scheme and run with `StoreKitConfiguration.storekit` as the StoreKit Configuration file. Initialize the SDK first, then load offerings and products; the sample creates one subscription button per backend package. The screen also demonstrates localized package prices, customer information, restore, logout, an expandable API request/response panel, and diagnostic logs.
 
 ## Sandbox/TestFlight
 

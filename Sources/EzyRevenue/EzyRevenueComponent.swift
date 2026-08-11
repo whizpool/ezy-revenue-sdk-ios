@@ -35,7 +35,8 @@ internal final class EzyRevenueComponent {
         )
         self.purchaseCoordinator = PurchaseCoordinator(
             backend: backend,
-            storeKitGateway: storeKitGateway
+            storeKitGateway: storeKitGateway,
+            logger: logger
         )
     }
 

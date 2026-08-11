@@ -270,6 +270,7 @@ public actor EzyRevenue {
             )
         } else {
             component.sessionCoordinator.updateLogger(logger)
+            component.purchaseCoordinator.updateLogger(logger)
         }
 
         let previousAppUserID = component.sessionCoordinator.appUserID

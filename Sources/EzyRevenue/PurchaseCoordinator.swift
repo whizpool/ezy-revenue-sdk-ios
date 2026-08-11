@@ -15,6 +15,7 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
 
     private let operationGate = AsyncOperationGate()
     private let stateLock = NSLock()
+    private var logger: EzyRevenueLogger
     private var activePurchaseGeneration: SessionGeneration?
     private var processedTransactionIDs: Set<UInt64> = []
     private var transactionListenerTask: Task<Void, Never>?
@@ -22,14 +23,20 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
 
     init(
         backend: any EzyRevenueBackend,
-        storeKitGateway: any StoreKitGateway
+        storeKitGateway: any StoreKitGateway,
+        logger: EzyRevenueLogger = EzyRevenueLogger(level: .none)
     ) {
         self.backend = backend
         self.storeKitGateway = storeKitGateway
+        self.logger = logger
     }
 
     deinit {
         transactionListenerTask?.cancel()
+    }
+
+    func updateLogger(_ logger: EzyRevenueLogger) {
+        self.logger = logger
     }
 
     var isPurchaseInProgress: Bool {
@@ -68,9 +75,11 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
     @available(macOS 12.0, iOS 15.0, *)
     func recoverUnfinishedTransactions(session: SessionCoordinator) async {
         let unfinished = await storeKitGateway.unfinishedTransactions()
+        logger.info("purchase_recovery_started: count=\(unfinished.count)")
         for transaction in unfinished {
             _ = await processTransaction(transaction, session: session, listenerEpoch: nil)
         }
+        logger.info("purchase_recovery_finished: count=\(unfinished.count)")
     }
 
     /// Synchronizes the App Store and processes both unfinished work and
@@ -206,6 +215,7 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
                 await purchaseLocked(productID: productID, session: session)
             }
         } catch {
+            logger.error("purchase_failed: operation gate error")
             return .failure(.purchaseFailed)
         }
     }
@@ -216,9 +226,12 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
         session: SessionCoordinator
     ) async -> EzyRevenueResult<PurchaseFlowResult> {
         guard let generation = session.captureGeneration() else {
+            logger.error("purchase_failed: SDK is not initialized")
             return .failure(.notInitialized)
         }
+        logger.info("purchase_started: product_id=\(productID)")
         guard beginPurchase(for: generation, session: session) else {
+            logger.warning("purchase_failed: another purchase is already in progress")
             return .failure(.purchaseInProgress)
         }
         defer { releasePurchase(for: generation) }
@@ -233,6 +246,9 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
                 appAccountToken: accountToken
             )
         } catch {
+            logger.error(
+                "purchase_storekit_failed: product_id=\(productID) error=\(String(describing: error))"
+            )
             return .failure(.purchaseFailed)
         }
 
@@ -245,9 +261,22 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
         switch outcome {
         case let .purchased(transaction):
             guard case let .verified(verifiedTransaction) = transaction else {
+                if case let .unverified(unverifiedTransaction) = transaction {
+                    logger.error(
+                        "purchase_unverified: product_id=\(unverifiedTransaction.productID) " +
+                            "transaction_id=\(unverifiedTransaction.id)"
+                    )
+                }
                 return .failure(.unverifiedTransaction)
             }
+            logger.info(
+                "purchase_verified: product_id=\(verifiedTransaction.productID) " +
+                    "transaction_id=\(verifiedTransaction.id)"
+            )
             guard markTransactionForProcessing(verifiedTransaction.id) else {
+                logger.warning(
+                    "purchase_duplicate_transaction: transaction_id=\(verifiedTransaction.id)"
+                )
                 return .success(.purchased(verifiedTransaction))
             }
             let result = await submitReceiptAndFinish(
@@ -260,8 +289,10 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
             }
             return result
         case .pending:
+            logger.info("purchase_pending: product_id=\(productID)")
             return .success(.pending)
         case .cancelled:
+            logger.info("purchase_cancelled: product_id=\(productID)")
             return .success(.cancelled)
         }
     }
@@ -337,6 +368,10 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
             receiptData: AppReceiptProvider.base64Receipt(),
             fetchToken: transaction.jwsRepresentation.nonBlank
         )
+        logger.info(
+            "receipt_submission_started: product_id=\(transaction.productID) " +
+                "transaction_id=\(transaction.id)"
+        )
         let backendResult = await session.executeAuthenticated { [backend] _ in
             do {
                 return try await backend.postReceipt(receipt)
@@ -346,16 +381,30 @@ internal final class PurchaseCoordinator: @unchecked Sendable {
         }
         guard case .success = backendResult else {
             if case let .failure(error) = backendResult {
+                logger.error(
+                    "receipt_submission_failed: product_id=\(transaction.productID) " +
+                        "transaction_id=\(transaction.id) error=\(error.localizedDescription)"
+                )
                 return .failure(error)
             }
+            logger.error(
+                "receipt_submission_failed: product_id=\(transaction.productID) " +
+                    "transaction_id=\(transaction.id) error=network"
+            )
             return .failure(.network)
         }
+
+        logger.info(
+            "receipt_submission_succeeded: product_id=\(transaction.productID) " +
+                "transaction_id=\(transaction.id)"
+        )
 
         guard listenerEpoch.map(isCurrentListenerEpoch) ?? true,
               session.isCurrent(generation) else {
             return .failure(.notInitialized)
         }
         await storeKitGateway.finish(transaction)
+        logger.info("transaction_finished: transaction_id=\(transaction.id)")
         return .success(.purchased(transaction))
     }
 
