@@ -17,29 +17,25 @@ struct ContentView: View {
                     }
                     .disabled(model.isBusy)
 
-                    HStack {
-                        Button("Load offerings and products") {
-                            model.loadCatalog()
-                        }
-                        .disabled(!model.isInitialized || model.isBusy)
-
-                        Button("Load customer") {
-                            model.loadCustomerInfo()
-                        }
-                        .disabled(!model.isInitialized || model.isBusy)
+                    Button("Load offerings and products") {
+                        model.loadCatalog()
                     }
+                    .disabled(!model.isInitialized || model.isBusy)
 
-                    HStack {
-                        Button("Restore purchases") {
-                            model.restorePurchases()
-                        }
-                        .disabled(!model.isInitialized || model.isBusy)
-
-                        Button("Log out") {
-                            model.logOut()
-                        }
-                        .disabled(!model.isInitialized || model.isBusy)
+                    Button("Load customer") {
+                        model.loadCustomerInfo()
                     }
+                    .disabled(!model.isInitialized || model.isBusy)
+
+                    Button("Restore purchases") {
+                        model.restorePurchases()
+                    }
+                    .disabled(!model.isInitialized || model.isBusy)
+
+                    Button("Log out") {
+                        model.logOut()
+                    }
+                    .disabled(!model.isInitialized || model.isBusy)
                 }
 
                 Section("API response") {

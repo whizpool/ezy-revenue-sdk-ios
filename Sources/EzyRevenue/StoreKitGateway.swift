@@ -240,7 +240,7 @@ internal final class StoreKit2Gateway: StoreKitGateway, @unchecked Sendable {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            throw StoreKitGatewayError.operationFailed(error.localizedDescription)
+            throw StoreKitGatewayError.operationFailed(Self.describe(error))
         }
     }
 
@@ -277,7 +277,7 @@ internal final class StoreKit2Gateway: StoreKitGateway, @unchecked Sendable {
         } catch let error as StoreKitGatewayError {
             throw error
         } catch {
-            throw StoreKitGatewayError.operationFailed(error.localizedDescription)
+            throw StoreKitGatewayError.operationFailed(Self.describe(error))
         }
     }
 
@@ -312,7 +312,7 @@ internal final class StoreKit2Gateway: StoreKitGateway, @unchecked Sendable {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            throw StoreKitGatewayError.operationFailed(error.localizedDescription)
+            throw StoreKitGatewayError.operationFailed(Self.describe(error))
         }
     }
 
@@ -322,6 +322,11 @@ internal final class StoreKit2Gateway: StoreKitGateway, @unchecked Sendable {
         Task {
             await updateHub.finish()
         }
+    }
+
+    private static func describe(_ error: Error) -> String {
+        let nsError = error as NSError
+        return "\(nsError.domain) (code=\(nsError.code)): \(nsError.localizedDescription)"
     }
 
     private static func micros(_ price: Decimal) -> Int64 {
