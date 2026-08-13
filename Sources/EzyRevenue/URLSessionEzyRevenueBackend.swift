@@ -19,7 +19,7 @@ internal final class URLSessionEzyRevenueBackend: EzyRevenueBackend, @unchecked 
         apiKey: String,
         baseURL: URL = URLSessionEzyRevenueBackend.productionBaseURL,
         urlSession: URLSession? = nil,
-        requestTimeout: TimeInterval = 15,
+        requestTimeout: TimeInterval = 30,
         metadataProvider: @escaping @Sendable () async -> RequestMetadata = {
             await MetadataProvider.current()
         },

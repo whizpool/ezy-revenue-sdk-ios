@@ -214,7 +214,7 @@ final class URLSessionBackendTests: XCTestCase {
         }
     }
 
-    private func makeBackend(requestTimeout: TimeInterval = 15) -> URLSessionEzyRevenueBackend {
+    private func makeBackend(requestTimeout: TimeInterval = 30) -> URLSessionEzyRevenueBackend {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubURLProtocol.self]
         let urlSession = URLSession(configuration: configuration)

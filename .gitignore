@@ -1,4 +1,5 @@
-docs
+docs/*
+!docs/security-follow-ups.md
 .build/
 DerivedData/
 **/xcuserdata/
