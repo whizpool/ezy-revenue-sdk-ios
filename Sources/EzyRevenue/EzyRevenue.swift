@@ -7,7 +7,7 @@ public actor EzyRevenue {
     public static let shared = EzyRevenue()
 
     /// The SDK version sent to the EzyRevenue backend.
-    public static let sdkVersion = "1.0.0"
+    public static let sdkVersion = "1.0.1"
 
     private var component: EzyRevenueComponent
     private let usesInjectedComponent: Bool

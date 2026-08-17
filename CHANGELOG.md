@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+
+- Updated production backend URL to `https://api.ezyrevenue.com`.
+- Added documentation and portal references to `https://ezyrevenue.com/`.
+
 ## 1.0.0
 
 - Added the iOS 15+ Swift Package and SwiftUI sample app.

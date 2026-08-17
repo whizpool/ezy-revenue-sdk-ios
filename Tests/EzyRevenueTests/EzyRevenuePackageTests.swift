@@ -3,6 +3,6 @@ import XCTest
 
 final class EzyRevenuePackageTests: XCTestCase {
     func testPackageExposesSDKVersion() {
-        XCTAssertEqual(EzyRevenue.sdkVersion, "1.0.0")
+        XCTAssertEqual(EzyRevenue.sdkVersion, "1.0.1")
     }
 }

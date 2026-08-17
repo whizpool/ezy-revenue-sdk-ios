@@ -1,9 +1,10 @@
 # EzyRevenue iOS SDK
 
-Swift Package Manager SDK for iOS subscriptions, one-time purchases, product catalogs, user
-identity, and entitlement information.
+Official Swift Package Manager SDK for [EzyRevenue](https://ezyrevenue.com/) — handle iOS subscriptions, one-time purchases, product catalogs, user identity, and entitlement management.
 
-> **Status:** pre-release internal SDK (`1.0.0` unreleased).
+For documentation, product configuration, and account dashboard, visit [https://ezyrevenue.com/](https://ezyrevenue.com/).
+
+> **Status:** pre-release internal SDK (`1.0.1`).
 
 ## Features
 
@@ -57,7 +58,7 @@ Add the package to the host application's dependencies:
 ```swift
 .package(
     url: "https://github.com/whizpool/ezy-revenue-sdk-ios.git",
-    from: "1.0.0"
+    from: "1.0.1"
 )
 ```
 
@@ -80,7 +81,7 @@ The public package URL and released version will be confirmed when distribution 
 Before testing purchases:
 
 1. Create subscriptions and supported non-consumable products in App Store Connect.
-2. Configure matching product identifiers in the EzyRevenue catalog.
+2. Configure matching product identifiers in the [EzyRevenue dashboard](https://ezyrevenue.com/).
 3. Configure the required subscription groups and subscription durations.
 4. Use a StoreKit Configuration file for local testing, or a Sandbox tester/TestFlight build
    for App Store testing.
