@@ -129,7 +129,7 @@
 			);
 			mainGroup = FFEB927A8955F5C7ED8535B7;
 			packageReferences = (
-				AA118B8232D08D8E89B63A8B /* XCLocalSwiftPackageReference "../.." */,
+				AA118B8232D08D8E89B63A8B /* XCRemoteSwiftPackageReference "ezy-revenue-sdk-ios" */,
 			);
 			productRefGroup = 47CAD2292CF4F407B3A46D8B /* Products */;
 			projectDirPath = "";
@@ -353,17 +353,21 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		AA118B8232D08D8E89B63A8B /* XCLocalSwiftPackageReference "../.." */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../..;
+/* Begin XCRemoteSwiftPackageReference section */
+		AA118B8232D08D8E89B63A8B /* XCRemoteSwiftPackageReference "ezy-revenue-sdk-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/whizpool/ezy-revenue-sdk-ios.git";
+			requirement = {
+				kind = exactVersion;
+				version = 1.0.1;
+			};
 		};
-/* End XCLocalSwiftPackageReference section */
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		2296AE421C585B6FE4EE067C /* EzyRevenue */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AA118B8232D08D8E89B63A8B /* XCLocalSwiftPackageReference "../.." */;
+			package = AA118B8232D08D8E89B63A8B /* XCRemoteSwiftPackageReference "ezy-revenue-sdk-ios" */;
 			productName = EzyRevenue;
 		};
 /* End XCSwiftPackageProductDependency section */
